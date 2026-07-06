@@ -5,6 +5,7 @@ WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
+# Copiamos los archivos de dependencias nativos de uv
 COPY pyproject.toml uv.lock ./
 
 RUN uv pip export --frozen --no-dev -o requirements.txt && \
