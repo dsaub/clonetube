@@ -1,35 +1,34 @@
 # --- Etapa 1: Builder ---
-FROM ghcr.io/astral-sh/uv:latest AS uv_bin
 FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
-# Copiamos uv directamente desde su imagen oficial
-COPY --from=uv_bin /uv /bin/uv
+# Traemos uv para gestionar la exportación a máxima velocidad
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-ENV UV_LINK_MODE=copy
-ENV UV_COMPILE_BYTECODE=1
-
-# Instalar dependencias en el .venv
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
 
-# --- Etapa 2: Imagen Final (Distroless puro) ---
-FROM gcr.io/distroless/cc-debian12:nonroot
+# 1. Exportamos las dependencias al formato estándar requirements.txt
+# 2. Usamos 'uv pip install' con '--target' para instalar las librerías 
+#    directamente en una carpeta normal, SIN crear un .venv
+RUN uv pip export --frozen --no-dev -o requirements.txt && \
+    uv pip install --no-cache-dir --target=/app/site-packages -r requirements.txt
+
+
+# --- Etapa 2: Imagen Final (Distroless Python Oficial) ---
+FROM gcr.io/distroless/python3-debian12:nonroot
 
 WORKDIR /app
 
-# 1. Copiamos ÚNICAMENTE el .venv y tu código. Nada de /usr/local/lib
-COPY --from=builder --chown=nonroot:nonroot /app/.venv /app/.venv
+# Copiamos la carpeta de librerías puras y tu código
+COPY --from=builder --chown=nonroot:nonroot /app/site-packages /app/site-packages
 COPY --chown=nonroot:nonroot . .
 
-# Variables de entorno apuntando al entorno virtual
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+# LE DECIMOS A PYTHON DÓNDE BUSCAR LAS LIBRERÍAS
+ENV PYTHONPATH="/app/site-packages"
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-# Ejecutamos usando el Python interno del .venv
-CMD ["/app/.venv/bin/python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# En Distroless Python, llamamos al módulo uvicorn directamente usando la sintaxis de array
+CMD ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
