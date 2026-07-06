@@ -3,16 +3,14 @@ FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
-# Traemos uv para gestionar la exportación a máxima velocidad
+# Traemos uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
+# Copiamos los archivos de dependencias nativos de uv
 COPY pyproject.toml uv.lock ./
 
-# 1. Exportamos las dependencias al formato estándar requirements.txt
-# 2. Usamos 'uv pip install' con '--target' para instalar las librerías 
-#    directamente en una carpeta normal, SIN crear un .venv
-RUN uv pip export --frozen --no-dev -o requirements.txt && \
-    uv pip install --no-cache-dir --target=/app/site-packages -r requirements.txt
+# CORRECCIÓN: Instalamos directo al directorio objetivo usando el candado de uv
+RUN uv pip install --no-cache-dir --system --target=/app/site-packages -r uv.lock
 
 
 # --- Etapa 2: Imagen Final (Distroless Python Oficial) ---
