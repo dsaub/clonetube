@@ -118,6 +118,14 @@ async def sign_chunk(
             },
             ExpiresIn=3600,
         )
+
+        # Reemplazar endpoint interno (Docker) por la URL pública accesible
+        # desde el navegador (nginx proxy /media/ -> MinIO).
+        if settings.S3_PUBLIC_ENDPOINT_URL and settings.S3_ENDPOINT_URL:
+            internal_base = f"{settings.S3_ENDPOINT_URL.rstrip('/')}/{settings.BUCKET_NAME}"
+            public_base = settings.S3_PUBLIC_ENDPOINT_URL.rstrip('/')
+            presigned_url = presigned_url.replace(internal_base, public_base)
+
         return SignChunkResponse(url=presigned_url)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -154,9 +162,16 @@ async def complete_multipart(body: CompleteMultipartBody):
             MultipartUpload={"Parts": parts_list},
         )
         original_filename = _filename_registry.pop(body.filename, None)
+
+        location = response.get("Location") or ""
+        if settings.S3_PUBLIC_ENDPOINT_URL and settings.S3_ENDPOINT_URL:
+            internal_base = f"{settings.S3_ENDPOINT_URL.rstrip('/')}/{settings.BUCKET_NAME}"
+            public_base = settings.S3_PUBLIC_ENDPOINT_URL.rstrip('/')
+            location = location.replace(internal_base, public_base)
+
         return CompleteMultipartResponse(
             status="success",
-            location=response.get("Location"),
+            location=location,
             key=body.filename,
             original_filename=original_filename or "desconocido",
         )
