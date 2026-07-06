@@ -17,8 +17,8 @@ clonetube/
 │   ├── clients.py               # Cliente S3 (boto3)
 │   ├── pymodels.py              # Modelos Pydantic (multipart upload)
 │   ├── routes/
-│   │   ├── __init__.py
 │   │   └── video.py             # Endpoints de subida multipart a S3
+│   ├── Dockerfile               # Imagen Python multi-stage distroless
 │   ├── pyproject.toml
 │   ├── uv.lock
 │   ├── .env.example
@@ -33,6 +33,7 @@ clonetube/
 │   │   │   └── DevView.vue      # Sandbox de desarrollo (multipart upload)
 │   │   └── components/
 │   │       └── UploadModal.vue   # Modal de subida multipart a S3
+│   ├── Dockerfile               # Imagen Node multi-stage + Caddy distroless
 │   ├── index.html
 │   ├── package.json
 │   ├── vite.config.ts
@@ -40,8 +41,6 @@ clonetube/
 │   └── env.d.ts
 ├── deploy/                      # Configuraciones de despliegue
 │   ├── docker-compose.yml       # Stack completo (MariaDB, MinIO, backend, frontend, nginx)
-│   ├── backend.Dockerfile       # Imagen Python multi-stage con uv
-│   ├── frontend.Dockerfile      # Imagen Node multi-stage + nginx
 │   ├── nginx.conf               # Reverse proxy HTTPS con SSL termination
 │   ├── generate-certs.sh        # Generador de certificados autofirmados
 │   └── .gitignore               # Excluye certs/ y .env
@@ -239,24 +238,26 @@ Configuracion completa de despliegue con Docker Compose. Stack de 6 servicios.
 | `minio` | `minio/minio:latest` | `9000` (API), `9001` (consola) | Almacenamiento S3-compatible |
 | `minio-init` | `minio/mc:latest` | — | Crea el bucket automaticamente al iniciar |
 | `backend` | `ghcr.io/dsaub/clonetube-backend:latest` | `8000` (interno) | API FastAPI |
-| `frontend` | `ghcr.io/dsaub/clonetube-frontend:latest` | `80` (interno) | SPA servida por nginx |
+| `frontend` | `ghcr.io/dsaub/clonetube-frontend:latest` | `8080` (interno) | SPA servida por nginx distroless |
 | `nginx` | `nginx:alpine` | `80`, `443` | Reverse proxy HTTPS con SSL termination |
 
 ### Dockerfiles
 
-#### `backend.Dockerfile`
+Los Dockerfiles estan en `backend/Dockerfile` y `frontend/Dockerfile` (no en `deploy/`).
 
-Build multi-stage:
+#### `backend/Dockerfile`
+
+Build multi-stage con imagenes distroless (Google distroless):
 1. **builder**: `python:3.14-slim` + `uv`. Copia `pyproject.toml` y `uv.lock`, ejecuta `uv sync --frozen --no-dev`.
-2. **runtime**: `python:3.14-slim`. Copia `.venv` del builder, copia codigo fuente. Ejecuta con usuario no-root `app`. Comando: `uv run uvicorn main:app --host 0.0.0.0 --port 8000`.
+2. **runtime**: `gcr.io/distroless/cc-debian12:nonroot` (distroless: sin shell, sin gestor de paquetes). Copia Python (`/usr/local/`), librerias del sistema y `.venv` del builder. Ejecuta con usuario `nonroot`. Comando: `uvicorn main:app --host 0.0.0.0 --port 8000`.
 
 Requiere `.dockerignore` en `backend/` (documentado en comentarios del Dockerfile).
 
-#### `frontend.Dockerfile`
+#### `frontend/Dockerfile`
 
-Build multi-stage:
-1. **build**: `node:24-slim` + `pnpm`. Instala dependencias, ejecuta `pnpm run build`.
-2. **runtime**: `nginx:alpine`. Copia `dist/` a `/usr/share/nginx/html`. Configura nginx inline con proxy reverso a `backend:8000` para `/api/`, SPA fallback a `index.html`, y cache de assets estaticos.
+Build multi-stage con imagenes distroless (Google distroless):
+1. **build**: `node:24-slim` + `pnpm`. Instala dependencias, ejecuta `pnpm run build`. Descarga binario estatico de Caddy v2.9.1 y genera Caddyfile.
+2. **runtime**: `gcr.io/distroless/static-debian12:nonroot` (distroless: sin shell, sin gestor de paquetes, usuario `nonroot`). Copia `dist/` a `/usr/share/nginx/html`, binario de Caddy y Caddyfile. Caddy escucha en puerto 8080, proxy reverso a `backend:8000` para `/api/`, SPA fallback a `index.html`.
 
 ### nginx.conf
 
@@ -264,7 +265,7 @@ Configuracion de nginx como reverse proxy HTTPS:
 - Puerto 80 → redirect 301 a HTTPS.
 - Puerto 443 → SSL termination con certificados en `/etc/nginx/certs/`.
 - `client_max_body_size 10G` (para subida de videos grandes).
-- Rutas: `/api/` → `backend:8000`, assets estaticos con cache 1y, resto → `frontend:80`.
+- Rutas: `/api/` → `backend:8000`, assets estaticos con cache 1y, resto → `frontend:8080`.
 
 ### generate-certs.sh
 
@@ -303,7 +304,7 @@ Workflow de GitHub Actions que construye y publica imagenes Docker en `ghcr.io`.
 - **Pasos**: checkout → login a ghcr.io → setup buildx → build & push.
 - **Tags**: `latest` y `${{ github.sha }}`.
 - **Cache**: GitHub Actions cache para acelerar builds.
-- **Contexto**: `./<service>` con Dockerfile en `./deploy/<service>.Dockerfile`.
+- **Contexto**: `./<service>` con Dockerfile en `./<service>/Dockerfile`.
 
 ---
 

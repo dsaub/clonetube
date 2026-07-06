@@ -22,24 +22,23 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-FROM python:3.14-slim
+FROM gcr.io/distroless/cc-debian12:nonroot
 
-RUN groupadd --system app && \
-    useradd --system --no-create-home --gid app app
+COPY --from=builder /usr/local/bin/python3.14 /usr/local/bin/python3.14
+COPY --from=builder /usr/local/bin/python3 /usr/local/bin/python3
+COPY --from=builder /usr/local/bin/python /usr/local/bin/python
+COPY --from=builder /usr/local/lib/ /usr/local/lib/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/ /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /lib/x86_64-linux-gnu/ /lib/x86_64-linux-gnu/
 
 WORKDIR /app
+COPY --chown=nonroot:nonroot . .
+COPY --from=builder --chown=nonroot:nonroot /app/.venv ./.venv
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
-
-COPY --chown=app:app . .
-COPY --from=builder --chown=app:app /app/.venv ./.venv
-
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH"
 ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-USER app
-
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

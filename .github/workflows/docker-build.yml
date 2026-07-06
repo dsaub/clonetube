@@ -34,7 +34,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.service }}
-          file: ./deploy/${{ matrix.service }}.Dockerfile
+          file: ./${{ matrix.service }}/Dockerfile
           push: true
           tags: |
             ghcr.io/dsaub/clonetube-${{ matrix.service }}:latest
