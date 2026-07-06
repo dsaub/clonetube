@@ -32,11 +32,11 @@ RUN mkdir -p /etc/caddy && \
     '}' \
     > /etc/caddy/Caddyfile
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM debian:12-slim
 
-COPY --from=build --chown=nonroot:nonroot /app/dist /usr/share/nginx/html
-COPY --from=build --chown=nonroot:nonroot /usr/local/bin/caddy /usr/local/bin/caddy
-COPY --from=build --chown=nonroot:nonroot /etc/caddy /etc/caddy
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /usr/local/bin/caddy /usr/local/bin/caddy
+COPY --from=build /etc/caddy /etc/caddy
 
 EXPOSE 8080
 
