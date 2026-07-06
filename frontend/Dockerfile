@@ -20,15 +20,8 @@ RUN mkdir -p /etc/caddy && \
     printf '%s\n' \
     ':8080 {' \
     '    root * /usr/share/nginx/html' \
-    '' \
-    '    handle /api/* {' \
-    '        reverse_proxy backend:8000' \
-    '    }' \
-    '' \
-    '    handle {' \
-    '        try_files {path} /index.html' \
-    '        file_server' \
-    '    }' \
+    '    try_files {path} /index.html' \
+    '    file_server' \
     '}' \
     > /etc/caddy/Caddyfile
 
