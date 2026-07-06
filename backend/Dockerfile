@@ -8,8 +8,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 # Copiamos los archivos de dependencias nativos de uv
 COPY pyproject.toml uv.lock ./
 
-RUN uv pip export --frozen --no-dev -o requirements.txt && \
-    uv pip install --no-cache-dir --target=/app/site-packages -r requirements.txt
+RUN uv sync --frozen --no-dev
 
 
 # --- Etapa 2: Imagen Final ---
@@ -17,10 +16,10 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
-COPY --from=builder /app/site-packages /app/site-packages
+COPY --from=builder /app/.venv /app/.venv
 COPY . .
 
-ENV PYTHONPATH="/app/site-packages"
+ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
