@@ -9,8 +9,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 # Copiamos los archivos de dependencias nativos de uv
 COPY pyproject.toml uv.lock ./
 
-# CORRECCIÓN: Instalamos directo al directorio objetivo usando el candado de uv
-RUN uv pip install --no-cache-dir --system --target=/app/site-packages -r uv.lock
+RUN uv pip compile pyproject.toml -o requirements.txt && \
+    uv pip install --no-cache-dir --system --target=/app/site-packages -r requirements.txt
 
 
 # --- Etapa 2: Imagen Final (Distroless Python Oficial) ---
