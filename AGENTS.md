@@ -1,292 +1,388 @@
 # Clonetube — AGENTS.md
 
-> Análisis completo de la arquitectura, componentes, dependencias y estado actual del proyecto.
+> Analisis completo de la arquitectura, componentes, dependencias y estado actual del proyecto.
 
 ---
 
-## 📁 Estructura general del proyecto
+## Estructura general del proyecto
 
 ```
 clonetube/
-├── backend/          # API REST con FastAPI (Python 3.14+)
-├── frontend/         # SPA con Vue 3 + TypeScript + Vite
-├── deploy/           # (vacío) — Reservado para configuraciones de despliegue
-└── AGENTS.md         # Este archivo
+├── .github/
+│   └── workflows/
+│       └── docker-build.yml     # CI/CD: build y push de imagenes Docker
+├── backend/                     # API REST con FastAPI (Python 3.14+)
+│   ├── main.py                  # App FastAPI + uvicorn
+│   ├── settings.py              # Variables de entorno (AWS/MinIO, DB)
+│   ├── clients.py               # Cliente S3 (boto3)
+│   ├── pymodels.py              # Modelos Pydantic (multipart upload)
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   └── video.py             # Endpoints de subida multipart a S3
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   ├── .env.example
+│   └── .python-version
+├── frontend/                    # SPA con Vue 3 + TypeScript + Vite
+│   ├── src/
+│   │   ├── App.vue              # Componente raiz con <RouterView />
+│   │   ├── main.ts              # Bootstrap: Pinia + Router
+│   │   ├── router/index.ts      # Rutas (lazy loading)
+│   │   ├── stores/counter.ts    # Store de ejemplo (Pinia)
+│   │   ├── views/
+│   │   │   └── DevView.vue      # Sandbox de desarrollo (multipart upload)
+│   │   └── components/
+│   │       └── UploadModal.vue   # Modal de subida multipart a S3
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
+│   └── env.d.ts
+├── deploy/                      # Configuraciones de despliegue
+│   ├── docker-compose.yml       # Stack completo (MariaDB, MinIO, backend, frontend, nginx)
+│   ├── backend.Dockerfile       # Imagen Python multi-stage con uv
+│   ├── frontend.Dockerfile      # Imagen Node multi-stage + nginx
+│   ├── nginx.conf               # Reverse proxy HTTPS con SSL termination
+│   ├── generate-certs.sh        # Generador de certificados autofirmados
+│   └── .gitignore               # Excluye certs/ y .env
+└── AGENTS.md
 ```
 
-El proyecto **clonetube** es un clon de YouTube en fase inicial (scaffolding). Tiene separación clara entre frontend y backend. La carpeta `deploy/` está vacía y reservada para futuras configuraciones de despliegue (Docker, CI/CD, etc.).
+El proyecto **clonetube** es un clon de YouTube. Tiene separacion clara entre frontend y backend. La carpeta `deploy/` contiene la configuracion completa de despliegue con Docker Compose (MariaDB, MinIO, nginx con HTTPS). CI/CD configurado con GitHub Actions.
 
 ---
 
-## 🔧 Backend (`backend/`)
+## Backend (`backend/`)
 
-### Descripción general
-API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor de paquetes. El proyecto está recién inicializado — solo contiene el esqueleto base.
+### Descripcion general
+
+API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor de paquetes. El backend expone endpoints para subida de videos mediante **multipart upload** a S3 (compatible con AWS S3 y MinIO). No hay persistencia en base de datos aun — se usa un diccionario en memoria para el registro de archivos.
 
 ### Archivos
 
-| Archivo | Propósito | Estado |
+| Archivo | Proposito | Estado |
 |---|---|---|
-| `main.py` | Punto de entrada de la aplicación. Define `main()` que imprime `"Hello from backend!"`. | Placeholder — sin servidor FastAPI aún |
-| `pyproject.toml` | Configuración del proyecto Python y dependencias. | Configuración inicial |
-| `README.md` | Documentación del backend. | Vacío |
-| `.python-version` | Fija la versión de Python (`>=3.14`). | Configurado |
-| `uv.lock` | Lockfile de dependencias generado por `uv`. | Generado |
-| `.gitignore` | Exclusiones de git para Python (.venv, etc.). | Configurado |
-| `.venv/` | Entorno virtual de Python. | Creado |
+| `main.py` | App FastAPI con titulo, descripcion y version. Incluye el router de video y runner uvicorn. | Implementado |
+| `settings.py` | Variables de entorno: `AWS_*`, `S3_ENDPOINT_URL`, `DATABASE_URL`. Sin validacion con Pydantic Settings. | Implementado |
+| `clients.py` | Cliente S3 con boto3. Soporta endpoint URL custom (MinIO) y firma v4. | Implementado |
+| `pymodels.py` | Modelos Pydantic: `StartMultipartResponse`, `SignChunkResponse`, `CompleteMultipartResponse`, `PartInfo`, `CompleteMultipartBody`. | Implementado |
+| `routes/video.py` | Router con prefijo `/api/v1/video` y 3 endpoints de multipart upload. | Implementado |
+| `pyproject.toml` | Dependencias: fastapi[standard], sqlmodel, alembic, boto3. | Configurado |
+| `.env.example` | Template de variables de entorno con valores para MinIO local y MariaDB. | Configurado |
+| `uv.lock` | Lockfile de dependencias. | Generado |
 
 ### Dependencias (`pyproject.toml`)
 
-| Dependencia | Versión | Propósito |
+| Dependencia | Version | Proposito |
 |---|---|---|
-| `fastapi[standard]` | `>=0.139.0` | Framework web asíncrono para la API REST. El extra `[standard]` incluye `uvicorn`, `pydantic`, `python-multipart`, etc. |
-| `sqlmodel` | `>=0.0.39` | ORM que combina SQLAlchemy y Pydantic para modelos de base de datos tipados. |
-| `alembic` | `>=1.18.5` | Herramienta de migraciones de base de datos para SQLAlchemy. |
+| `fastapi[standard]` | `>=0.139.0` | Framework web asincrono. El extra `[standard]` incluye uvicorn, pydantic, etc. |
+| `sqlmodel` | `>=0.0.39` | ORM que combina SQLAlchemy y Pydantic (aun sin uso en modelos de BD). |
+| `alembic` | `>=1.18.5` | Migraciones de BD (aun sin configurar). |
+| `boto3` | `>=1.43.40` | SDK de AWS para interactuar con S3/MinIO. |
 
-### Análisis técnico
+### API — Endpoints implementados
 
-- **FastAPI** se eligió por su alto rendimiento asíncrono, validación automática con Pydantic y generación de OpenAPI/Swagger.
-- **SQLModel** permite definir modelos que funcionan tanto como tablas SQLAlchemy como esquemas Pydantic, eliminando duplicación.
-- **Alembic** manejará migraciones para evolución del esquema de BD.
-- `main.py` aún no levanta un servidor — solo imprime un mensaje. Falta implementar la instancia de `FastAPI()` y el punto de entrada `uvicorn`.
-- No hay modelos, rutas, ni configuración de base de datos definidos aún.
+| Metodo | Ruta | Proposito |
+|---|---|---|
+| `POST` | `/api/v1/video/start-multipart` | Inicia un multipart upload en S3. Recibe `original_filename` por query. Genera key UUID. Devuelve `uploadId`, `key`, `original_filename`. |
+| `GET` | `/api/v1/video/sign-chunk` | Genera URL prefirmada (1h) para subir un fragmento. Parametros: `filename`, `upload_id`, `chunk_number`. |
+| `POST` | `/api/v1/video/complete-multipart` | Completa el multipart upload. Recibe `filename`, `uploadId`, `parts[]` en el body. |
+
+### Analisis tecnico
+
+- **FastAPI** elegido por rendimiento asincrono, validacion con Pydantic y OpenAPI/Swagger automatico.
+- **boto3** con soporte para `endpoint_url` permite usar MinIO local o cualquier S3-compatible.
+- Las claves de video se generan con `uuid4` dentro de `videos/` para evitar colisiones.
+- El registro `_filename_registry` es un `dict` en memoria (no persiste entre reinicios).
+- No hay modelos de BD ni migraciones configuradas (sqlmodel y alembic instalados pero sin usar).
+- No hay CORS configurado.
+- No hay autenticacion.
+- No hay tests.
 
 ### Tareas pendientes
-- [ ] Crear instancia de `FastAPI` en `main.py` con `uvicorn`.
+
+- [ ] Agregar CORS (`CORSMiddleware`) para peticiones desde el frontend.
+- [ ] Migrar `settings.py` a Pydantic Settings con validacion.
 - [ ] Definir modelos de BD con SQLModel (User, Video, Comment, etc.).
-- [ ] Configurar Alembic y crear migración inicial.
-- [ ] Implementar endpoints REST (CRUD de videos, autenticación, etc.).
-- [ ] Agregar CORS para permitir peticiones desde el frontend.
+- [ ] Configurar Alembic y crear migracion inicial.
+- [ ] Migrar `_filename_registry` a base de datos.
+- [ ] Implementar endpoints REST adicionales (listado, busqueda, streaming).
+- [ ] Agregar autenticacion (JWT).
 - [ ] Agregar tests con `pytest` + `httpx`.
 
 ---
 
-## 🖥️ Frontend (`frontend/`)
+## Frontend (`frontend/`)
 
-### Descripción general
-SPA construida con **Vue 3** (Composition API + `<script setup>`), **TypeScript 6.0**, **Vite 8**, **Pinia** para estado global y **Vue Router 5** para enrutamiento.
+### Descripcion general
 
-### Archivos principales
-
-| Archivo | Propósito | Estado |
-|---|---|---|
-| `index.html` | HTML de entrada. Monta `#app` y carga `/src/main.ts`. | Configuración base de Vite |
-| `package.json` | Dependencias, scripts y metadatos del proyecto. | Completo |
-| `vite.config.ts` | Configuración de Vite: plugins (Vue, Vue DevTools) y alias `@` → `./src`. | Configurado |
-| `tsconfig.json` | TSConfig raíz que referencia `tsconfig.app.json` y `tsconfig.node.json`. | Configurado |
-| `tsconfig.app.json` | TSConfig para el código de la app (extiende `@vue/tsconfig`). Incluye alias `@/*` y `noUncheckedIndexedAccess`. | Configurado |
-| `tsconfig.node.json` | TSConfig para archivos de build (vite.config, etc.) usando Node.js. | Configurado |
-| `env.d.ts` | Declaración de tipos para el cliente Vite (`/// <reference types="vite/client" />`). | Configurado |
-| `README.md` | Documentación oficial del template Vue + Vite. | Template por defecto |
+SPA construida con **Vue 3** (Composition API + `<script setup>`), **TypeScript 6.0**, **Vite 8**, **Pinia** para estado global y **Vue Router 5** para enrutamiento. Tema oscuro con CSS custom. El unico flujo implementado es la vista de desarrollo (`/dev`) con el modal de subida multipart a S3.
 
 ### Estructura de `src/`
 
 ```
 src/
-├── App.vue             # Componente raíz
-├── main.ts             # Bootstrap de la aplicación
+├── App.vue                    # <RouterView /> + reset CSS + tema oscuro
+├── main.ts                    # Bootstrap: Pinia + Router
 ├── router/
-│   └── index.ts        # Configuración de Vue Router
-└── stores/
-    └── counter.ts      # Store de ejemplo con Pinia
+│   └── index.ts               # Ruta /dev con lazy loading
+├── stores/
+│   └── counter.ts             # Store de ejemplo (no funcional)
+├── views/
+│   └── DevView.vue            # Sandbox: interfaz de prueba de multipart upload
+└── components/
+    └── UploadModal.vue        # Modal completo de subida: seleccion, progreso, logs, resultado
 ```
 
-### Análisis por archivo fuente
+### Analisis por archivo fuente
 
-#### `main.ts` — Bootstrap de la aplicación
-
-```typescript
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
-
-const app = createApp(App)
-app.use(createPinia())    // Estado global
-app.use(router)           // Enrutamiento
-app.mount('#app')         // Montaje en el DOM
-```
-
-- Instala **Pinia** antes que el router (buena práctica: el store debe estar disponible para guards de navegación).
-- No hay configuración global adicional (plugins, componentes globales, etc.).
-
-#### `App.vue` — Componente raíz
+#### `App.vue`
 
 ```vue
 <script setup lang="ts"></script>
 <template>
-  <h1>You did it!</h1>
-  <p>Visit <a href="...">vuejs.org</a> to read the documentation</p>
+  <RouterView />
 </template>
-<style scoped></style>
+<style>
+  /* Reset CSS universal + tema oscuro (#0f0f1a) */
+</style>
 ```
 
-- **Estado:** Placeholder del template inicial de Vue.
-- Usa `<script setup lang="ts">` (Syntax Sugar de Composition API).
-- No tiene layout, `<RouterView />`, ni estilos.
-- Falta implementar el layout principal con header, sidebar, y router-view.
+- `<RouterView />` implementado. Sin layout compartido (header, sidebar).
+- Estilos globales: reset de box-sizing, fondo oscuro, fuente Inter.
 
-#### `router/index.ts` — Enrutamiento
+#### `router/index.ts`
 
-```typescript
-import { createRouter, createWebHistory } from 'vue-router'
-const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [],  // Sin rutas definidas
-})
-export default router
-```
+- Ruta unica: `/dev` → `DevView.vue` con lazy loading.
+- `createWebHistory` (sin `#` en URL).
 
-- Usa `createWebHistory` (modo history de HTML5, sin `#` en la URL).
-- **Estado:** Sin rutas definidas. Falta crear vistas como Home, Watch, Channel, etc.
-- `import.meta.env.BASE_URL` permite desplegar en subdirectorios.
+#### `DevView.vue`
 
-#### `stores/counter.ts` — Store de ejemplo (Pinia)
+Pagina sandbox para probar el flujo multipart upload. Incluye:
+- Header con badge "DEV" y enlace de vuelta.
+- Hero section con descripcion del flujo y boton "Subir video".
+- Diagrama de los 4 pasos del flujo (seleccionar, fragmentar, subir, completar).
+- Listado de los 3 endpoints utilizados con metodo y descripcion.
+- Seccion de requisitos.
+- Renderiza `<UploadModal>` condicionalmente.
 
-```typescript
-export const useCounterStore = defineStore('counter', () => {
-  const count = ref(0)
-  const doubleCount = computed(() => count.value * 2)
-  function increment() { count.value++ }
-  return { count, doubleCount, increment }
-})
-```
+#### `UploadModal.vue`
 
-- Store de ejemplo usando **Setup Store syntax** de Pinia (preferida sobre Options Store).
-- Demuestra el patrón: `ref` para estado, `computed` para getters, funciones para acciones.
-- **No es parte funcional del proyecto** — debe reemplazarse por stores reales (user, videos, etc.).
+Componente modal completo que implementa el flujo multipart upload cliente:
+- **Estado**: maquina de estados (`idle`, `uploading`, `done`, `error`).
+- **Fragmentacion**: chunks de 5 MB.
+- **Flujo**:
+  1. `POST /api/v1/video/start-multipart` — inicia la subida.
+  2. Por cada chunk: `GET /api/v1/video/sign-chunk` → `PUT <presigned-url>`.
+  3. `POST /api/v1/video/complete-multipart` — completa la subida.
+- **UI**: drop zone, barra de progreso, logs en tiempo real, pantalla de exito con key y location, pantalla de error.
+- Estilos scoped con diseño moderno (modal, overlay con backdrop-blur, gradientes).
 
 ### Dependencias
 
-| Dependencia | Versión | Tipo | Propósito |
+| Dependencia | Version | Tipo | Proposito |
 |---|---|---|---|
 | `vue` | `^3.5.38` | runtime | Framework reactivo de UI |
 | `vue-router` | `^5.1.0` | runtime | Enrutamiento SPA |
-| `pinia` | `^3.0.4` | runtime | Gestión de estado global |
+| `pinia` | `^3.0.4` | runtime | Gestion de estado global |
 | `vite` | `^8.0.16` | dev | Build tool y dev server |
 | `@vitejs/plugin-vue` | `^6.0.7` | dev | Soporte de Vue SFC en Vite |
-| `vite-plugin-vue-devtools` | `^8.1.2` | dev | Integración de Vue DevTools en Vite |
+| `vite-plugin-vue-devtools` | `^8.1.2` | dev | Vue DevTools en Vite |
 | `typescript` | `~6.0.0` | dev | TypeScript |
-| `vue-tsc` | `^3.3.5` | dev | Type checking para archivos `.vue` |
-| `@vue/tsconfig` | `^0.9.1` | dev | Config base de TS para Vue |
-| `@tsconfig/node24` | `^24.0.4` | dev | Config base de TS para Node 24 |
-| `@types/node` | `^24.13.2` | dev | Tipos de Node.js |
-| `npm-run-all2` | `^9.0.2` | dev | Ejecutar múltiples scripts npm en paralelo/secuencia |
+| `vue-tsc` | `^3.3.5` | dev | Type checking para `.vue` |
+| `npm-run-all2` | `^9.0.2` | dev | Ejecutar scripts en paralelo/secuencia |
 
 ### Scripts
 
-| Script | Comando | Propósito |
+| Script | Comando | Proposito |
 |---|---|---|
 | `dev` | `vite` | Servidor de desarrollo con HMR |
-| `build` | `run-p type-check "build-only {@}" --` | Build de producción: type-check + vite build en paralelo |
-| `preview` | `vite preview` | Previsualizar build de producción localmente |
+| `build` | `run-p type-check "build-only {@}" --` | Build: type-check + vite build en paralelo |
+| `preview` | `vite preview` | Previsualizar build de produccion |
 | `build-only` | `vite build` | Solo build sin type-check |
-| `type-check` | `vue-tsc --build` | Verificación de tipos con TS |
+| `type-check` | `vue-tsc --build` | Verificacion de tipos |
 
-### Análisis técnico
+### Analisis tecnico
 
-- **Vite 8** como bundler: HMR instantáneo, build rápido con Rollup.
-- **TypeScript 6.0** con `noUncheckedIndexedAccess` activado (accesos a arrays/objetos verificados contra `undefined`).
-- Separación limpia de configs TS: app vs node (build tools).
-- **Pinia** con Setup Store syntax: mejor inferencia de tipos y composición.
-- **Vue DevTools** integrado en desarrollo para debugging.
-- El proyecto usa `pnpm` como package manager (según README).
+- **Vite 8**: HMR instantaneo, build con Rollup.
+- **TypeScript 6.0** con `noUncheckedIndexedAccess`.
+- **Pinia** con Setup Store syntax.
+- **Vite proxy**: las peticiones a `/api` se redirigen al backend (configurado en `vite.config.ts` o via nginx en produccion).
+- El frontend implementa el flujo completo de subida multipart desde el navegador.
+- No usa librerias externas de UI — todos los estilos son CSS scoped manual.
+- Tema oscuro consistente en toda la app.
 
 ### Tareas pendientes
-- [ ] Reemplazar `App.vue` con layout real: header, sidebar, `<RouterView />`.
-- [ ] Crear vistas: `HomeView`, `WatchView`, `ChannelView`, `SearchView`, `UploadView`.
-- [ ] Definir rutas en `router/index.ts` con lazy loading.
-- [ ] Crear stores reales: `useAuthStore`, `useVideoStore`, etc.
+
+- [ ] Crear layout principal con header, sidebar y `<RouterView />`.
+- [ ] Crear vistas: `HomeView`, `WatchView`, `ChannelView`, `SearchView`.
+- [ ] Definir rutas adicionales con lazy loading.
+- [ ] Crear stores reales: `useAuthStore`, `useVideoStore`.
 - [ ] Agregar componentes UI: `VideoCard`, `CommentSection`, `VideoPlayer`, `Sidebar`.
-- [ ] Integrar con API del backend (usando `fetch` o `axios`).
-- [ ] Agregar estilos globales (CSS custom properties, reset, tema).
+- [ ] Eliminar store de ejemplo `counter.ts`.
+- [ ] Agregar vistas para login/registro.
+- [ ] Integrar reproductor de video (HLS/DASH).
 
 ---
 
-## 🚀 Deploy (`deploy/`)
+## Deploy (`deploy/`)
 
 ### Estado actual
-Carpeta **vacía**. Reservada para futuras configuraciones de despliegue.
 
-### Propósito esperado
-- `Dockerfile` para backend y frontend.
-- `docker-compose.yml` para orquestación local.
-- Configuraciones de CI/CD (GitHub Actions, GitLab CI).
-- Scripts de despliegue a VPS o cloud (AWS, Azure, etc.).
-- Configuración de reverse proxy (nginx, Caddy).
+Configuracion completa de despliegue con Docker Compose. Stack de 6 servicios.
+
+### Servicios (`docker-compose.yml`)
+
+| Servicio | Imagen | Puerto | Proposito |
+|---|---|---|---|
+| `mariadb` | `mariadb:11` | — | Base de datos relacional |
+| `minio` | `minio/minio:latest` | `9000` (API), `9001` (consola) | Almacenamiento S3-compatible |
+| `minio-init` | `minio/mc:latest` | — | Crea el bucket automaticamente al iniciar |
+| `backend` | `ghcr.io/dsaub/clonetube-backend:latest` | `8000` (interno) | API FastAPI |
+| `frontend` | `ghcr.io/dsaub/clonetube-frontend:latest` | `80` (interno) | SPA servida por nginx |
+| `nginx` | `nginx:alpine` | `80`, `443` | Reverse proxy HTTPS con SSL termination |
+
+### Dockerfiles
+
+#### `backend.Dockerfile`
+
+Build multi-stage:
+1. **builder**: `python:3.14-slim` + `uv`. Copia `pyproject.toml` y `uv.lock`, ejecuta `uv sync --frozen --no-dev`.
+2. **runtime**: `python:3.14-slim`. Copia `.venv` del builder, copia codigo fuente. Ejecuta con usuario no-root `app`. Comando: `uv run uvicorn main:app --host 0.0.0.0 --port 8000`.
+
+Requiere `.dockerignore` en `backend/` (documentado en comentarios del Dockerfile).
+
+#### `frontend.Dockerfile`
+
+Build multi-stage:
+1. **build**: `node:24-slim` + `pnpm`. Instala dependencias, ejecuta `pnpm run build`.
+2. **runtime**: `nginx:alpine`. Copia `dist/` a `/usr/share/nginx/html`. Configura nginx inline con proxy reverso a `backend:8000` para `/api/`, SPA fallback a `index.html`, y cache de assets estaticos.
+
+### nginx.conf
+
+Configuracion de nginx como reverse proxy HTTPS:
+- Puerto 80 → redirect 301 a HTTPS.
+- Puerto 443 → SSL termination con certificados en `/etc/nginx/certs/`.
+- `client_max_body_size 10G` (para subida de videos grandes).
+- Rutas: `/api/` → `backend:8000`, assets estaticos con cache 1y, resto → `frontend:80`.
+
+### generate-certs.sh
+
+Script bash que genera certificados autofirmados para desarrollo local:
+- `privkey.pem` (clave privada RSA 2048).
+- `fullchain.pem` (certificado x509).
+- Valido por 365 dias.
+- Subject: `localhost` con SAN: `DNS:localhost`, `DNS:*.localhost`, `IP:127.0.0.1`.
+- No sobrescribe si ya existen.
+
+### Variables de entorno requeridas
+
+| Variable | Default | Proposito |
+|---|---|---|
+| `MARIADB_ROOT_PASSWORD` | `rootpassword` | Password root de MariaDB |
+| `MARIADB_DATABASE` | `clonetube` | Nombre de la BD |
+| `MARIADB_USER` | `clonetube` | Usuario de la BD |
+| `MARIADB_PASSWORD` | `password` | Password del usuario |
+| `MINIO_ROOT_USER` | `minioadmin` | Usuario root de MinIO |
+| `MINIO_ROOT_PASSWORD` | `minioadmin` | Password root de MinIO |
+| `AWS_ACCESS_KEY_ID` | `minioadmin` | Access key S3 |
+| `AWS_SECRET_ACCESS_KEY` | `minioadmin` | Secret key S3 |
+| `AWS_REGION` | `us-east-1` | Region AWS |
+| `AWS_BUCKET_NAME` | `clonetube` | Nombre del bucket S3 |
+| `S3_ENDPOINT_URL` | `http://minio:9000` | Endpoint S3 (MinIO) |
+| `DATABASE_URL` | `mysql+pymysql://clonetube:password@mariadb:3306/clonetube` | Cadena de conexion BD |
 
 ---
 
-## 🏗️ Arquitectura general planeada
+## CI/CD (`.github/workflows/docker-build.yml`)
+
+Workflow de GitHub Actions que construye y publica imagenes Docker en `ghcr.io`.
+
+- **Trigger**: push a `latest`, `workflow_dispatch` (manual).
+- **Estrategia**: matrix sobre `[backend, frontend]`.
+- **Pasos**: checkout → login a ghcr.io → setup buildx → build & push.
+- **Tags**: `latest` y `${{ github.sha }}`.
+- **Cache**: GitHub Actions cache para acelerar builds.
+- **Contexto**: `./<service>` con Dockerfile en `./deploy/<service>.Dockerfile`.
+
+---
+
+## Arquitectura general
 
 ```mermaid
 graph TD
     subgraph Frontend["Frontend (Vue 3 + Vite)"]
         A[App.vue] --> B[RouterView]
-        B --> C[HomeView]
-        B --> D[WatchView]
-        B --> E[ChannelView]
-        F[Pinia Stores] --> C
-        F --> D
+        B --> C[DevView]
+        C --> D[UploadModal]
+        F[Pinia Stores]
     end
 
     subgraph Backend["Backend (FastAPI)"]
         G[FastAPI App]
-        G --> H[(SQLModel ORM)]
-        H --> I[(Base de Datos)]
-        G --> J[Alembic Migrations]
+        G --> H[routes/video.py]
+        H --> I[boto3 S3 Client]
+        I --> J[(MinIO / S3)]
+        G --> K[(MariaDB - pendiente)]
+    end
+
+    subgraph Deploy["Deploy (Docker Compose)"]
+        L[nginx :443] --> M[frontend :80]
+        L --> N[backend :8000]
+        N --> O[(mariadb)]
+        N --> P[(minio)]
     end
 
     Frontend -->|HTTP REST API| Backend
     Backend -->|JSON| Frontend
-
-    subgraph Deploy["Deploy"]
-        K[Docker Compose]
-        K --> Frontend
-        K --> Backend
-        K --> L[(DB Container)]
-    end
+    CI[GitHub Actions] -->|push images| R[ghcr.io]
 ```
 
 ---
 
-## 📊 Resumen de madurez del proyecto
+## Resumen de madurez del proyecto
 
 | Capa | Estado | Progreso |
 |---|---|---|
-| Backend — Framework | Scaffolding inicial | 5% |
-| Backend — Modelos BD | No iniciado | 0% |
-| Backend — Endpoints API | No iniciado | 0% |
-| Frontend — Estructura | Scaffolding inicial | 5% |
-| Frontend — Vistas/Rutas | No iniciado | 0% |
+| Backend — Framework | FastAPI configurado con router | 15% |
+| Backend — API Multipart Upload | 3 endpoints implementados | 60% |
+| Backend — Modelos BD | No iniciado (sqlmodel sin usar) | 0% |
+| Backend — Autenticacion | No iniciado | 0% |
+| Backend — Tests | No iniciado | 0% |
+| Frontend — Estructura | App.vue con RouterView + tema oscuro | 15% |
+| Frontend — Componente Upload | UploadModal completo con flujo multipart | 80% |
+| Frontend — Vistas/Rutas | Solo `/dev` (sandbox) | 5% |
 | Frontend — Stores | Template de ejemplo | 2% |
-| Frontend — Integración API | No iniciado | 0% |
-| Deploy | No iniciado | 0% |
+| Deploy — Docker | Stack completo con 6 servicios | 90% |
+| Deploy — CI/CD | GitHub Actions funcional | 80% |
 
 ---
 
-## 🛠️ Convenciones y guías para agentes
+## Convenciones y guias para agentes
 
 ### Backend
-- Usar **type hints** de Python en todo el código.
+- Usar **type hints** de Python en todo el codigo.
 - Los modelos de BD se definen con `SQLModel` (hereda de `SQLAlchemy` y `Pydantic`).
 - Las migraciones se gestionan con **Alembic**.
 - Seguir estructura modular: `models/`, `routers/`, `schemas/`, `services/`, `core/`.
-- Usar `uv` para gestión de dependencias: `uv add <paquete>`, `uv sync`.
+- Usar `uv` para gestion de dependencias: `uv add <paquete>`, `uv sync`.
+- Las variables de entorno se leen desde `settings.py`.
 
 ### Frontend
 - Usar **`<script setup lang="ts">`** en todos los SFC de Vue.
 - Stores de Pinia con **Setup Store syntax** (funciones composables).
 - Rutas con **lazy loading**: `() => import('@/views/...')`.
-- Estilos con **CSS scoped** o **`<style module>`**.
+- Estilos con **CSS scoped**.
 - Alias `@` mapea a `src/`.
 - Usar `pnpm` como package manager.
+- Mantener el tema oscuro (`#0f0f1a` fondo, `#e0e0e0` texto, `#6c63ff` accent, `#2a2a4a` bordes).
 
 ### General
-- Commits en español
-- PRs pequeños y enfocados en un solo cambio.
-- No incluir secretos en el código (usar variables de entorno).
+- Commits en espanol.
+- PRs pequenos y enfocados en un solo cambio.
+- No incluir secretos en el codigo (usar variables de entorno).
+- Las imagenes Docker se publican en `ghcr.io/dsaub/clonetube-<service>`.
 
 ---
 
-*Última actualización: 2026-07-06*
+*Ultima actualizacion: 2026-07-06*
