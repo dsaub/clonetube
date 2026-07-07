@@ -3,7 +3,7 @@ import os
 import tempfile
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Query, HTTPException
-from clients import s3_client
+from clients import s3_client, s3_client_public
 from pymodels import (
     PartInfo,
     CompleteMultipartBody,
@@ -123,7 +123,7 @@ async def sign_chunk(
     - **chunk_number**: número de parte (1‑based).
     """
     try:
-        presigned_url = s3_client.generate_presigned_url(
+        presigned_url = s3_client_public.generate_presigned_url(
             ClientMethod="upload_part",
             Params={
                 "Bucket": settings.BUCKET_NAME,
@@ -133,10 +133,6 @@ async def sign_chunk(
             },
             ExpiresIn=3600,
         )
-
-        # Reemplazar endpoint interno (Docker) por la URL pública accesible
-        # desde el navegador (nginx proxy /media/ -> MinIO).
-        presigned_url = _rewrite_public_url(presigned_url)
 
         return SignChunkResponse(url=presigned_url)
     except Exception as e:
@@ -223,11 +219,11 @@ async def _transcode_and_replace(key: str, original_filename: str | None = None)
 
 
 def _rewrite_public_url(url: str) -> str:
-    """Reemplaza el endpoint interno de S3 por la URL pública."""
+    """Reemplaza el endpoint interno de S3 por la URL pública (solo el host)."""
     if settings.S3_PUBLIC_ENDPOINT_URL and settings.S3_ENDPOINT_URL:
-        internal_base = f"{settings.S3_ENDPOINT_URL.rstrip('/')}/{settings.BUCKET_NAME}"
+        internal_base = settings.S3_ENDPOINT_URL.rstrip('/')
         public_base = settings.S3_PUBLIC_ENDPOINT_URL.rstrip('/')
-        return url.replace(internal_base, public_base)
+        return url.replace(internal_base, public_base, 1)
     return url
 
 
@@ -288,7 +284,7 @@ async def stream_url(
 ):
     """Devuelve una URL prefirmada válida por 24h para streaming del video."""
     try:
-        url = s3_client.generate_presigned_url(
+        url = s3_client_public.generate_presigned_url(
             ClientMethod="get_object",
             Params={
                 "Bucket": settings.BUCKET_NAME,
@@ -296,7 +292,6 @@ async def stream_url(
             },
             ExpiresIn=86400,
         )
-        url = _rewrite_public_url(url)
         return StreamUrlResponse(url=url, key=key)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
