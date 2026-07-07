@@ -30,3 +30,19 @@ class CompleteMultipartResponse(BaseModel):
     location: Optional[str] = None
     key: str
     original_filename: str
+
+
+class VideoListItem(BaseModel):
+    key: str
+    size: int
+    last_modified: str
+    original_filename: str
+
+
+class VideoListResponse(BaseModel):
+    videos: List[VideoListItem]
+
+
+class StreamUrlResponse(BaseModel):
+    url: str
+    key: str
