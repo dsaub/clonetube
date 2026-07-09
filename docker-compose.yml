@@ -47,7 +47,8 @@ services:
       - mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD && mc mb --ignore-existing local/$$AWS_BUCKET_NAME
 
   backend:
-    image: ghcr.io/dsaub/clonetube-backend:latest
+    #image: ghcr.io/dsaub/clonetube-backend:latest
+    build: backend
     environment:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
@@ -67,7 +68,8 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/dsaub/clonetube-frontend:latest
+    #image: ghcr.io/dsaub/clonetube-frontend:latest
+    build: frontend
     depends_on:
       - backend
     restart: unless-stopped

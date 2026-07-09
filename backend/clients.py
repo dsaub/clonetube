@@ -1,13 +1,14 @@
-import settings
 import boto3
 from botocore.config import Config as BotoConfig
+
+from settings import settings
 
 _s3_config = BotoConfig(signature_version='s3v4')
 
 
 def _build_s3_kwargs(endpoint_url: str | None) -> dict:
     kwargs = {
-        'region_name': settings.REGION_NAME,
+        'region_name': settings.AWS_REGION,
         'aws_access_key_id': settings.AWS_ACCESS_KEY_ID,
         'aws_secret_access_key': settings.AWS_SECRET_ACCESS_KEY,
         'config': _s3_config,

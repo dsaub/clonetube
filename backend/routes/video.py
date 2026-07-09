@@ -14,7 +14,7 @@ from pymodels import (
     VideoListResponse,
     StreamUrlResponse,
 )
-import settings
+from settings import settings
 from video_processor import ALLOWED_VIDEO_EXTENSIONS, is_valid_video_extension, transcode_to_mp4
 
 logger = logging.getLogger("routes.video")
@@ -73,7 +73,7 @@ async def start_multipart(
         _filename_registry[video_key] = original_filename
 
         response = s3_client.create_multipart_upload(
-            Bucket=settings.BUCKET_NAME,
+            Bucket=settings.AWS_BUCKET_NAME,
             Key=video_key,
         )
         return StartMultipartResponse(
@@ -194,7 +194,7 @@ async def _transcode_and_replace(key: str, original_filename: str | None = None)
         tmp_fd, tmp_input = tempfile.mkstemp(suffix=".mp4")
         os.close(tmp_fd)
         logger.info("Downloading %s from S3 for transcoding", key)
-        s3_client.download_file(settings.BUCKET_NAME, key, tmp_input)
+        s3_client.download_file(settings.AWS_BUCKET_NAME, key, tmp_input)
 
         tmp_fd, tmp_output = tempfile.mkstemp(suffix=".mp4")
         os.close(tmp_fd)
