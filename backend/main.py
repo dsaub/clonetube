@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import create_db_and_tables
-from routes.auth import router as auth_router
+from routes.login import router as auth_router
 from routes.video import router as video_router
 
 

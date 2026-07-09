@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -7,6 +9,7 @@ from passlib.context import CryptContext
 from settings import settings
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_RESET_TOKEN_EXPIRE_MINUTES = 15
 
 
 def hash_password(password: str) -> tuple[str, int]:
@@ -37,3 +40,22 @@ def create_access_token(user_id: uuid.UUID, password_version: int) -> str:
 def decode_access_token(token: str) -> dict:
     """Decodifica y valida un JWT. Devuelve el payload o lanza jwt.PyJWTError."""
     return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+
+
+def create_reset_token() -> tuple[str, str, datetime]:
+    """Genera un token de restablecimiento de contraseña.
+
+    Returns:
+        Tupla con (token_plano, token_hash, datetime_expiracion).
+        El token plano se devuelve al cliente; el hash se guarda en BD.
+        La expiración es de 15 minutos.
+    """
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    expires_at = datetime.now(UTC) + timedelta(minutes=_RESET_TOKEN_EXPIRE_MINUTES)
+    return token, token_hash, expires_at
+
+
+def hash_reset_token(token: str) -> str:
+    """Hashea un token de restablecimiento con SHA-256 para buscarlo en BD."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

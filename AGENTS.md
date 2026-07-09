@@ -12,13 +12,28 @@ clonetube/
 │   └── workflows/
 │       └── docker-build.yml     # CI/CD: build y push de imagenes Docker
 ├── backend/                     # API REST con FastAPI (Python 3.14+)
-│   ├── main.py                  # App FastAPI + uvicorn
-│   ├── settings.py              # Variables de entorno (AWS/MinIO, DB)
-│   ├── clients.py               # Cliente S3 (boto3)
-│   ├── pymodels.py              # Modelos Pydantic (multipart upload)
+│   ├── main.py                  # FastAPI + CORS + lifespan (crea tablas startup)
+│   ├── settings.py              # Pydantic Settings (AWS, DB, JWT)
+│   ├── database.py              # Engine SQLModel + get_session dependency
+│   ├── models.py                # SQLModel: User, Video, UserLikesVideo
+│   ├── clients.py               # Cliente S3 (boto3) con endpoint_URL custom
+│   ├── pymodels.py              # Modelos Pydantic (multipart upload, auth, listado, streaming)
+│   ├── video_processor.py       # Transcodificacion con ffmpeg (MP4/H.264/AAC)
+│   ├── auth/
+│   │   ├── security.py          # Hash bcrypt + JWT + reset token (create/decode, password_version)
+│   │   ├── schemas.py           # Pydantic: RegisterRequest, LoginRequest, TokenResponse, etc.
+│   │   └── dependencies.py      # get_current_user (valida JWT + password_version)
 │   ├── routes/
-│   │   └── video.py             # Endpoints de subida multipart a S3
-│   ├── Dockerfile               # Imagen Python multi-stage distroless
+│   │   ├── login.py             # /api/v1/auth (register, login, change-password, forgot-password, reset-password, me)
+│   │   ├── video.py             # Endpoints multipart upload + list + stream + transcoding
+│   │   └── auth.py             # Antiguo router de auth (reemplazado por login.py)
+│   ├── alembic/                 # Migraciones con Alembic
+│   │   ├── env.py               # Usa settings.DATABASE_URL + SQLModel metadata
+│   │   ├── script.py.mako
+│   │   └── versions/            # Migraciones generadas
+│   ├── alembic.ini
+│   ├── entrypoint.sh            # Ejecuta `alembic upgrade head` + CMD
+│   ├── Dockerfile               # Python slim + ffmpeg + entrypoint
 │   ├── pyproject.toml
 │   ├── uv.lock
 │   ├── .env.example
@@ -39,15 +54,16 @@ clonetube/
 │   ├── vite.config.ts
 │   ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
 │   └── env.d.ts
-├── deploy/                      # Configuraciones de despliegue
-│   ├── docker-compose.yml       # Stack completo (MariaDB, MinIO, backend, frontend, nginx)
+├── docker-compose.yml           # Stack desarrollo (MariaDB, MinIO, backend, frontend, nginx)
+├── deploy/                        # Configuraciones de despliegue
+│   ├── docker-compose.yml       # Stack produccion (imagenes ghcr.io pre-built)
 │   ├── nginx.conf               # Reverse proxy HTTPS con SSL termination
 │   ├── generate-certs.sh        # Generador de certificados autofirmados
 │   └── .gitignore               # Excluye certs/ y .env
 └── AGENTS.md
 ```
 
-El proyecto **clonetube** es un clon de YouTube. Tiene separacion clara entre frontend y backend. La carpeta `deploy/` contiene la configuracion completa de despliegue con Docker Compose (MariaDB, MinIO, nginx con HTTPS). CI/CD configurado con GitHub Actions.
+El proyecto **clonetube** es un clon de YouTube. Tiene separacion clara entre frontend y backend. La carpeta `deploy/` contiene la configuracion de despliegue en produccion con Docker Compose (MariaDB, MinIO, nginx con HTTPS), y `docker-compose.yml` en la raiz para desarrollo. CI/CD configurado con GitHub Actions.
 
 ---
 
@@ -55,29 +71,43 @@ El proyecto **clonetube** es un clon de YouTube. Tiene separacion clara entre fr
 
 ### Descripcion general
 
-API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor de paquetes. El backend expone endpoints para subida de videos mediante **multipart upload** a S3 (compatible con AWS S3 y MinIO). No hay persistencia en base de datos aun — se usa un diccionario en memoria para el registro de archivos.
+API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor de paquetes. El backend expone endpoints para subida de videos mediante **multipart upload** a S3 (compatible con AWS S3 y MinIO), autenticacion JWT, y persistencia en MariaDB mediante SQLModel + Alembic.
 
 ### Archivos
 
 | Archivo | Proposito | Estado |
-|---|---|---|
-| `main.py` | App FastAPI con titulo, descripcion y version. Incluye el router de video y runner uvicorn. | Implementado |
-| `settings.py` | Variables de entorno: `AWS_*`, `S3_ENDPOINT_URL`, `DATABASE_URL`. Sin validacion con Pydantic Settings. | Implementado |
+|---|---|---|---|
+| `main.py` | App FastAPI con titulo, descripcion y version. Incluye el router de auth y video, CORS y lifespan (crea tablas al inicio). | Implementado |
+| `settings.py` | Pydantic Settings con validacion: `AWS_*`, `S3_ENDPOINT_URL`, `DATABASE_URL`, `JWT_*`. | Implementado |
+| `database.py` | Engine SQLModel + `get_session` como dependency de FastAPI. | Implementado |
+| `models.py` | Tablas SQLModel: `User`, `Video`, `UserLikesVideo`. User incluye `password_reset_token_hash` y `password_reset_expires_at`. | Implementado |
 | `clients.py` | Cliente S3 con boto3. Soporta endpoint URL custom (MinIO) y firma v4. | Implementado |
-| `pymodels.py` | Modelos Pydantic: `StartMultipartResponse`, `SignChunkResponse`, `CompleteMultipartResponse`, `PartInfo`, `CompleteMultipartBody`. | Implementado |
-| `routes/video.py` | Router con prefijo `/api/v1/video` y 3 endpoints de multipart upload. | Implementado |
-| `pyproject.toml` | Dependencias: fastapi[standard], sqlmodel, alembic, boto3. | Configurado |
+| `pymodels.py` | Modelos Pydantic: multipart upload, auth (register, login, change-password, forgot-password, reset-password), listado y streaming. | Implementado |
+| `video_processor.py` | Transcodificacion con ffmpeg (MP4/H.264/AAC) + validacion de extensiones. | Implementado |
+| `auth/security.py` | Hash bcrypt + JWT (create/decode) con soporte de `password_version` + `create_reset_token` y `hash_reset_token`. | Implementado |
+| `auth/schemas.py` | Pydantic: `RegisterRequest`, `LoginRequest`, `ChangePasswordRequest`, `TokenResponse`, `UserResponse`. | Implementado |
+| `auth/dependencies.py` | `get_current_user`: valida JWT + verifica `password_version` contra BD. | Implementado |
+| `routes/video.py` | Router con prefijo `/api/v1/video`: multipart upload, listado, streaming, transcodificacion. | Implementado |
+| `routes/login.py` | Router con prefijo `/api/v1/auth`: register, login, change-password, forgot-password, reset-password, me. | Implementado |
+| `alembic/` | Migraciones con Alembic: `env.py` usa `settings.DATABASE_URL` + metadata de SQLModel. | Configurado |
+| `alembic.ini` | Configuracion de Alembic. | Configurado |
+| `entrypoint.sh` | Script que ejecuta `alembic upgrade head` antes de iniciar la app. | Implementado |
+| `pyproject.toml` | Dependencias: fastapi[standard], sqlmodel, alembic, boto3, passlib, pyjwt, bcrypt, pymysql. | Configurado |
 | `.env.example` | Template de variables de entorno con valores para MinIO local y MariaDB. | Configurado |
 | `uv.lock` | Lockfile de dependencias. | Generado |
 
 ### Dependencias (`pyproject.toml`)
 
 | Dependencia | Version | Proposito |
-|---|---|---|
+|---|---|---|---|
 | `fastapi[standard]` | `>=0.139.0` | Framework web asincrono. El extra `[standard]` incluye uvicorn, pydantic, etc. |
-| `sqlmodel` | `>=0.0.39` | ORM que combina SQLAlchemy y Pydantic (aun sin uso en modelos de BD). |
-| `alembic` | `>=1.18.5` | Migraciones de BD (aun sin configurar). |
+| `sqlmodel` | `>=0.0.39` | ORM que combina SQLAlchemy y Pydantic. |
+| `alembic` | `>=1.18.5` | Migraciones de BD. |
 | `boto3` | `>=1.43.40` | SDK de AWS para interactuar con S3/MinIO. |
+| `passlib[bcrypt]` | `>=1.7.4` | Hashing de contraseñas con bcrypt. |
+| `pyjwt[crypto]` | `>=2.10.0` | Creacion y validacion de tokens JWT. |
+| `bcrypt` | `==4.1.3` | Algoritmo bcrypt para passlib. |
+| `pymysql` | `>=1.1.1` | Driver MySQL para SQLAlchemy. |
 
 ### API — Endpoints implementados
 
@@ -86,6 +116,14 @@ API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor
 | `POST` | `/api/v1/video/start-multipart` | Inicia un multipart upload en S3. Recibe `original_filename` por query. Genera key UUID. Devuelve `uploadId`, `key`, `original_filename`. |
 | `GET` | `/api/v1/video/sign-chunk` | Genera URL prefirmada (1h) para subir un fragmento. Parametros: `filename`, `upload_id`, `chunk_number`. |
 | `POST` | `/api/v1/video/complete-multipart` | Completa el multipart upload. Recibe `filename`, `uploadId`, `parts[]` en el body. |
+| `GET` | `/api/v1/video/list` | Lista videos en S3 con metadatos (size, last_modified, original_filename). |
+| `GET` | `/api/v1/video/stream-url` | Genera URL prefirmada (24h) para streaming de un video. |
+| `POST` | `/api/v1/auth/register` | Registra un nuevo usuario. Devuelve token JWT. |
+| `POST` | `/api/v1/auth/login` | Inicia sesion con username/password. Devuelve token JWT. |
+| `POST` | `/api/v1/auth/change-password` | Cambia la contraseña (requiere auth). Incrementa `password_version` invalidando tokens anteriores. |
+| `POST` | `/api/v1/auth/forgot-password` | Solicita restablecimiento de contraseña. Genera token hash con expiracion de 15 min. |
+| `POST` | `/api/v1/auth/reset-password` | Restablece contraseña con token. Incrementa `password_version`. |
+| `GET` | `/api/v1/auth/me` | Devuelve datos del usuario autenticado. |
 
 ### Analisis tecnico
 
@@ -93,20 +131,17 @@ API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor
 - **boto3** con soporte para `endpoint_url` permite usar MinIO local o cualquier S3-compatible.
 - Las claves de video se generan con `uuid4` dentro de `videos/` para evitar colisiones.
 - El registro `_filename_registry` es un `dict` en memoria (no persiste entre reinicios).
-- No hay modelos de BD ni migraciones configuradas (sqlmodel y alembic instalados pero sin usar).
-- No hay CORS configurado.
-- No hay autenticacion.
+- `models.py` define tablas SQLModel (`User`, `Video`, `UserLikesVideo`) mapeadas a MariaDB. User incluye campos de reset de contraseña.
+- `alembic/` configurado con `env.py` que lee `settings.DATABASE_URL` y usa `SQLModel.metadata` para autogenerate. Con migracion `0001_add_password_reset_fields` generada.
+- CORS configurado en `main.py` con `CORSMiddleware` (allow all origins).
+- Autenticacion JWT implementada: registro, login, cambio de contraseña con `password_version`, forgot/reset password con token de 15 min, proteccion de rutas via `get_current_user`.
+- `routes/login.py` reemplaza a `routes/auth.py` con 6 endpoints completos.
 - No hay tests.
 
 ### Tareas pendientes
 
-- [ ] Agregar CORS (`CORSMiddleware`) para peticiones desde el frontend.
-- [ ] Migrar `settings.py` a Pydantic Settings con validacion.
-- [ ] Definir modelos de BD con SQLModel (User, Video, Comment, etc.).
-- [ ] Configurar Alembic y crear migracion inicial.
 - [ ] Migrar `_filename_registry` a base de datos.
 - [ ] Implementar endpoints REST adicionales (listado, busqueda, streaming).
-- [ ] Agregar autenticacion (JWT).
 - [ ] Agregar tests con `pytest` + `httpx`.
 
 ---
@@ -228,7 +263,7 @@ Componente modal completo que implementa el flujo multipart upload cliente:
 
 ### Estado actual
 
-Configuracion completa de despliegue con Docker Compose. Stack de 6 servicios.
+Configuracion completa de despliegue con Docker Compose. Stack de 6 servicios. `docker-compose.yml` en raiz para desarrollo (build local), `deploy/docker-compose.yml` para produccion (imagenes ghcr.io).
 
 ### Servicios (`docker-compose.yml`)
 
@@ -249,9 +284,7 @@ Los Dockerfiles estan en `backend/Dockerfile` y `frontend/Dockerfile` (no en `de
 
 Build multi-stage con imagenes distroless (Google distroless):
 1. **builder**: `python:3.14-slim` + `uv`. Copia `pyproject.toml` y `uv.lock`, ejecuta `uv sync --frozen --no-dev`.
-2. **runtime**: `gcr.io/distroless/cc-debian12:nonroot` (distroless: sin shell, sin gestor de paquetes). Copia Python (`/usr/local/`), librerias del sistema y `.venv` del builder. Ejecuta con usuario `nonroot`. Comando: `uvicorn main:app --host 0.0.0.0 --port 8000`.
-
-Requiere `.dockerignore` en `backend/` (documentado en comentarios del Dockerfile).
+2. **runtime**: `python:3.14-slim` con ffmpeg instalado via apt. Copia `.venv` del builder, el codigo y `entrypoint.sh`. Comando: `fastapi run main.py --port 8000`. Entrypoint: `/entrypoint.sh` que ejecuta `alembic upgrade head` antes de iniciar.
 
 #### `frontend/Dockerfile`
 
@@ -276,6 +309,10 @@ Script bash que genera certificados autofirmados para desarrollo local:
 - Subject: `localhost` con SAN: `DNS:localhost`, `DNS:*.localhost`, `IP:127.0.0.1`.
 - No sobrescribe si ya existen.
 
+### entrypoint.sh
+
+Script bash que ejecuta `alembic upgrade head` antes de iniciar la aplicacion FastAPI. Se usa como ENTRYPOINT en el Dockerfile de produccion.
+
 ### Variables de entorno requeridas
 
 | Variable | Default | Proposito |
@@ -292,6 +329,9 @@ Script bash que genera certificados autofirmados para desarrollo local:
 | `AWS_BUCKET_NAME` | `clonetube` | Nombre del bucket S3 |
 | `S3_ENDPOINT_URL` | `http://minio:9000` | Endpoint S3 (MinIO) |
 | `DATABASE_URL` | `mysql+pymysql://clonetube:password@mariadb:3306/clonetube` | Cadena de conexion BD |
+| `JWT_SECRET` | `cambiar-por-clave-segura-de-al-menos-32-byts` | Secreto para firmar tokens JWT |
+| `JWT_ALGORITHM` | `HS256` | Algoritmo de firma JWT |
+| `JWT_EXPIRE_MINUTES` | `60` | Tiempo de expiracion del token en minutos |
 
 ---
 
@@ -324,19 +364,22 @@ graph TD
         G --> H[routes/video.py]
         H --> I[boto3 S3 Client]
         I --> J[(MinIO / S3)]
-        G --> K[(MariaDB - pendiente)]
+        G --> K[(MariaDB)]
+        G --> L[routes/login.py]
+        L --> M[auth/security.py]
+        L --> N[(MariaDB - Users)]
     end
 
     subgraph Deploy["Deploy (Docker Compose)"]
-        L[nginx :443] --> M[frontend :80]
-        L --> N[backend :8000]
-        N --> O[(mariadb)]
-        N --> P[(minio)]
+        O[nginx :443] --> P[frontend :80]
+        O --> Q[backend :8000]
+        Q --> R[(mariadb)]
+        Q --> S[(minio)]
     end
 
     Frontend -->|HTTP REST API| Backend
     Backend -->|JSON| Frontend
-    CI[GitHub Actions] -->|push images| R[ghcr.io]
+    CI[GitHub Actions] -->|push images| T[ghcr.io]
 ```
 
 ---
@@ -347,8 +390,9 @@ graph TD
 |---|---|---|
 | Backend — Framework | FastAPI configurado con router | 15% |
 | Backend — API Multipart Upload | 3 endpoints implementados | 60% |
-| Backend — Modelos BD | No iniciado (sqlmodel sin usar) | 0% |
-| Backend — Autenticacion | No iniciado | 0% |
+| Backend — Modelos BD | SQLModel definido (User, Video, UserLikesVideo) | 30% |
+| Backend — Autenticacion JWT | Register, login, change-password, me, password_version, forgot/reset | 40% |
+| Backend — Migraciones | Alembic configurado con env.py + metadata SQLModel | 30% |
 | Backend — Tests | No iniciado | 0% |
 | Frontend — Estructura | App.vue con RouterView + tema oscuro | 15% |
 | Frontend — Componente Upload | UploadModal completo con flujo multipart | 80% |
@@ -386,4 +430,4 @@ graph TD
 
 ---
 
-*Ultima actualizacion: 2026-07-06*
+*Ultima actualizacion: 2026-07-09*
