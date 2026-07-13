@@ -1,11 +1,42 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import UploadModal from '@/components/UploadModal.vue'
+import { listVideos, type VideoListItem } from '@/api/video'
 
 const showModal = ref(false)
+const videos = ref<VideoListItem[]>([])
+const loadingVideos = ref(false)
+const videosError = ref('')
 
 function openModal() { showModal.value = true }
-function closeModal() { showModal.value = false }
+function closeModal() { showModal.value = false; fetchVideos() }
+
+async function fetchVideos() {
+  loadingVideos.value = true
+  videosError.value = ''
+  try {
+    videos.value = await listVideos()
+  } catch (e) {
+    videosError.value = e instanceof Error ? e.message : 'Error al cargar videos'
+  } finally {
+    loadingVideos.value = false
+  }
+}
+
+function watchVideo(key: string) {
+  window.open(`/watch?key=${encodeURIComponent(key)}`, '_blank')
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+onMounted(() => {
+  fetchVideos()
+})
 </script>
 
 <template>
@@ -89,6 +120,34 @@ function closeModal() { showModal.value = false }
         <li>Credenciales AWS configuradas en variables de entorno</li>
         <li>Bucket S3 con permisos de multipart upload</li>
       </ul>
+    </section>
+
+    <!-- Listado de videos -->
+    <section class="video-list">
+      <h3>🎬 Videos subidos</h3>
+
+      <div v-if="loadingVideos" class="list-loading">Cargando…</div>
+      <div v-else-if="videosError" class="list-error">{{ videosError }}</div>
+      <div v-else-if="videos.length === 0" class="list-empty">
+        No hay videos subidos todavía.
+      </div>
+
+      <div v-else class="video-grid">
+        <div
+          v-for="video in videos"
+          :key="video.key"
+          class="video-card"
+          @click="watchVideo(video.key)"
+        >
+          <div class="card-thumb">
+            <div class="thumb-placeholder">▶</div>
+          </div>
+          <div class="card-info">
+            <p class="card-name">{{ video.original_filename }}</p>
+            <p class="card-meta">{{ formatSize(video.size) }}</p>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Modal -->
@@ -309,5 +368,82 @@ function closeModal() { showModal.value = false }
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
   font-size: 0.82rem;
+}
+
+/* ─── Video list ────────────────────────────────── */
+.video-list { margin-bottom: 2rem; }
+
+.video-list h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+  color: #ccc;
+}
+
+.list-loading,
+.list-empty,
+.list-error {
+  padding: 2rem;
+  text-align: center;
+  background: #1a1a2e;
+  border-radius: 10px;
+  border: 1px solid #2a2a4a;
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.list-error { color: #ff6b6b; }
+
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.video-card {
+  background: #1a1a2e;
+  border-radius: 10px;
+  border: 1px solid #2a2a4a;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s;
+}
+
+.video-card:hover {
+  border-color: #6c63ff;
+  transform: translateY(-2px);
+}
+
+.card-thumb {
+  aspect-ratio: 16 / 9;
+  background: #0f0f1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumb-placeholder {
+  font-size: 2rem;
+  color: #3a3a5a;
+}
+
+.card-info {
+  padding: 0.6rem 0.75rem;
+}
+
+.card-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #e0e0e0;
+  margin: 0 0 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-meta {
+  font-size: 0.75rem;
+  color: #777;
+  margin: 0;
 }
 </style>

@@ -8,6 +8,11 @@ const router = createRouter({
       name: 'dev',
       component: () => import('@/views/DevView.vue'),
     },
+    {
+      path: '/watch',
+      name: 'watch',
+      component: () => import('@/views/WatchView.vue'),
+    },
   ],
 })
 

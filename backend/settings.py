@@ -1,8 +1,28 @@
-import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", None)
-REGION_NAME = os.getenv("AWS_REGION", "us-east-1")
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", None)
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", None)
-S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL", None)
-S3_PUBLIC_ENDPOINT_URL = os.getenv("S3_PUBLIC_ENDPOINT_URL", None)
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # ─── AWS / MinIO (S3-compatible) ─────────────
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_REGION: str = "us-east-1"
+    AWS_BUCKET_NAME: str = "clonetube"
+    S3_ENDPOINT_URL: str | None = None
+    S3_PUBLIC_ENDPOINT_URL: str | None = None
+
+    # ─── Base de datos ──────────────────────────
+    DATABASE_URL: str = "mysql+pymysql://clonetube:password@localhost:3306/clonetube"
+
+    # ─── JWT ─────────────────────────────────────
+    JWT_SECRET: str = "cambiar-por-clave-segura-de-al-menos-32-byts"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60
+
+
+settings = Settings()

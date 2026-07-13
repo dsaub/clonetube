@@ -67,7 +67,7 @@ async function startUpload() {
       const chunkNumber = i + 1
       const start = i * CHUNK_SIZE
       const end = Math.min(start + CHUNK_SIZE, file.size)
-      const chunk = file.slice(start, end)
+      const chunk = new Blob([file.slice(start, end)])
 
       // ── 2a. Obtener URL prefirmada ─────────────────
       log(`Fragmento ${chunkNumber}/${totalChunks}: obteniendo URL…`)
