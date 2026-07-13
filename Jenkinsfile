@@ -8,14 +8,16 @@ pipeline {
             }
         }
         stage("Login with Docker") {
-            withCredentials([
-                usernamePassword(
-                    credentialsId: 'github-token',
-                    usernameVariable: 'USER',
-                    passwordVariable: 'PASS'
-                )
-            ]) {
-                sh 'docker login ghcr.io -u $USER -p $PASS'
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'github-token',
+                        usernameVariable: 'USER',
+                        passwordVariable: 'PASS'
+                    )
+                ]) {
+                    sh 'docker login ghcr.io -u $USER -p $PASS'
+                }
             }
         }
         stage("Backend Docker Image Build and Push") {
