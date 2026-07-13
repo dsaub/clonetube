@@ -23,14 +23,14 @@ pipeline {
         stage("Backend Docker Image Build and Push") {
             steps {
                 
-                sh 'docker build -t ghcr.io/dsaub/clonetube-backend:latest backend'
+                sh 'cd clonetube && docker build -t ghcr.io/dsaub/clonetube-backend:latest backend'
                
                 sh 'docker push ghcr.io/dsaub/clonetube-backend:latest'
             }
         }
         stage("Frontend Docker Image Build and Push") {
             steps {
-                sh 'docker build -t ghcr.io/dsaub/clonetube-frontend:latest frontend'
+                sh 'cd clonetube && docker build -t ghcr.io/dsaub/clonetube-frontend:latest frontend'
                 sh 'docker push ghcr.io/dsaub/clonetube-frontend:latest'
             }
         }
