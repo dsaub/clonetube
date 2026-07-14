@@ -7,6 +7,7 @@ pipeline {
     stages {
         stage("Checkout") {
             steps {
+                sh 'git config --global --add safe.directory "*"'
                 checkout([$class: 'GitSCM',
                     branches: [[name: '*/latest']],
                     extensions: [[$class: 'CloneOption', shallow: true, depth: 1, noTags: true]],
