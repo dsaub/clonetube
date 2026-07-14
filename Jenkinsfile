@@ -1,8 +1,15 @@
 pipeline {
     agent any
+    options {
+        skipDefaultCheckout()
+    }
 
     stages {
-        
+        stage("Checkout") {
+            steps {
+                checkout scm: scm, extensions: [[$class: 'CloneOption', shallow: true, depth: 1, noTags: true]]
+            }
+        }
         stage("Login with Docker") {
             steps {
                 withCredentials([
