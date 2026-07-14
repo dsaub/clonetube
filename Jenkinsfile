@@ -7,7 +7,10 @@ pipeline {
     stages {
         stage("Checkout") {
             steps {
-                checkout scm: scm, extensions: [[$class: 'CloneOption', shallow: true, depth: 1, noTags: true]]
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/latest']],
+                    extensions: [[$class: 'CloneOption', shallow: true, depth: 1, noTags: true]],
+                    userRemoteConfigs: [[url: 'https://github.com/dsaub/clonetube.git']]])
             }
         }
         stage("Login with Docker") {
