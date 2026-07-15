@@ -24,7 +24,7 @@ logger = logging.getLogger("routes.video")
 router = APIRouter(prefix="/api/v1/video", tags=["S3 Multipart Upload"])
 
 # Almacén en memoria del mapping: generated_key -> original_filename
-# TODO: migrar a base de datos cuando esté disponible
+# TODO: migrar a base de datos cuando esté disponible.
 _filename_registry: dict[str, str] = {}
 
 
