@@ -61,6 +61,52 @@ pipeline {
             }
         }
 
+        stage("Frontend Tests") {
+            steps {
+                catchError(message: 'Frontend tests completed with failures', buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    sh '''
+                        sudo docker run --rm \\
+                            -v "$(pwd)/frontend:/app" \\
+                            -w /app \\
+                            node:24-slim \\
+                            sh -c "
+                                npm install -g pnpm -q &&
+                                pnpm install --frozen-lockfile -q &&
+                                pnpm test -- --reporter=junit --outputFile=test-results.xml 2>&1
+                            " | tee frontend/vitest-output.log
+                    '''
+                }
+            }
+            post {
+                always {
+                    junit 'frontend/test-results.xml'
+
+                    script {
+                        def warningsFile = 'frontend/vitest-warnings.txt'
+                        sh """
+                            grep -iE '(warning|deprecation|deprecated)' frontend/vitest-output.log 2>/dev/null | sort -u > $warningsFile || true
+                        """
+                        if (fileExists(warningsFile)) {
+                            def warnings = readFile(warningsFile).trim()
+                            if (warnings) {
+                                echo "=== VITEST WARNINGS ==="
+                                echo warnings
+                                echo "========================"
+                            }
+                        }
+                    }
+
+                    archiveArtifacts artifacts: 'frontend/vitest-output.log, frontend/vitest-warnings.txt', allowEmptyArchive: true
+
+                    recordIssues(
+                        enabledForFailure: true,
+                        aggregatingResults: true,
+                        tools: [issues(pattern: 'frontend/vitest-output.log', id: 'vitest', name: 'Vitest Warnings')]
+                    )
+                }
+            }
+        }
+
         stage("Login with Docker") {
             steps {
                 withCredentials([
