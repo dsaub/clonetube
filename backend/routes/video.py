@@ -54,7 +54,7 @@ async def start_multipart(
         ...,
         description="Nombre original del archivo (solo para referencia). "
         "El video se almacenará internamente con un UUID.",
-        example="mi-video.mp4",
+        examples=["mi-video.mp4"],
     ),
 ):
     """
@@ -103,18 +103,18 @@ async def sign_chunk(
     filename: str = Query(
         ...,
         description="Key del objeto en S3 (devuelta por `/start-multipart`).",
-        example="videos/a1b2c3d4e5f6....mp4",
+        examples=["videos/a1b2c3d4e5f6....mp4"],
     ),
     upload_id: str = Query(
         ...,
         description="ID del multipart upload obtenido en `/start-multipart`.",
-        example="example-upload-id-12345",
+        examples=["example-upload-id-12345"],
     ),
     chunk_number: int = Query(
         ...,
         description="Número del fragmento a subir (empezando en 1).",
         ge=1,
-        example=1,
+        examples=[1],
     ),
 ):
     """
@@ -281,7 +281,7 @@ async def stream_url(
     key: str = Query(
         ...,
         description="Key del video en S3 (ej: videos/abc123.mp4).",
-        example="videos/a1b2c3d4e5f6....mp4",
+        examples=["videos/a1b2c3d4e5f6....mp4"],
     ),
 ):
     """Devuelve una URL prefirmada válida por 24h para streaming del video."""
