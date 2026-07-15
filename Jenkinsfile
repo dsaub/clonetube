@@ -19,7 +19,7 @@ pipeline {
             steps {
                 catchError(message: 'Backend tests completed with failures', buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                     sh '''
-                        docker run --rm \\
+                        sudo docker run --rm \\
                             -v "$(pwd)/backend:/app" \\
                             -w /app \\
                             python:3.14-slim \\
@@ -70,22 +70,22 @@ pipeline {
                         passwordVariable: 'PASS'
                     )
                 ]) {
-                    sh 'docker login ghcr.io -u $USER -p $PASS'
+                    sh 'sudo docker login ghcr.io -u $USER -p $PASS'
                 }
             }
         }
 
         stage("Backend Docker Image Build and Push") {
             steps {
-                sh 'docker build -t ghcr.io/dsaub/clonetube-backend:latest backend'
-                sh 'docker push ghcr.io/dsaub/clonetube-backend:latest'
+                sh 'sudo docker build -t ghcr.io/dsaub/clonetube-backend:latest backend'
+                sh 'sudo docker push ghcr.io/dsaub/clonetube-backend:latest'
             }
         }
 
         stage("Frontend Docker Image Build and Push") {
             steps {
-                sh 'docker build -t ghcr.io/dsaub/clonetube-frontend:latest frontend'
-                sh 'docker push ghcr.io/dsaub/clonetube-frontend:latest'
+                sh 'sudo docker build -t ghcr.io/dsaub/clonetube-frontend:latest frontend'
+                sh 'sudo docker push ghcr.io/dsaub/clonetube-frontend:latest'
             }
         }
     }
