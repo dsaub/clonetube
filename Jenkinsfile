@@ -5,17 +5,27 @@ pipeline {
     }
 
     stages {
-        stage('Debug') {
-            steps {
-                sh '''
-                whoami
-                pwd
-                echo $PATH
-                which docker || true
-                ls -l /usr/bin/docker || true
-                '''
-            }
-        }
+        stage('Deep Debug') {
+        steps {
+        sh '''
+        echo "=== HOST ==="
+        hostname
+        cat /etc/os-release
+
+        echo "=== DOCKER ==="
+        find / -name docker -type f 2>/dev/null | head -50
+
+        echo "=== ROOT ==="
+        ls -la /
+
+        echo "=== USR BIN ==="
+        ls -la /usr/bin | grep docker || true
+
+        echo "=== PROCESS ==="
+        ps aux | head
+        '''
+    }
+}
         stage("Checkout") {
             steps {
                 sh 'git config --global --add safe.directory "*"'
