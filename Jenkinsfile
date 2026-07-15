@@ -72,7 +72,7 @@ pipeline {
                             sh -c "
                                 npm install -g pnpm -q &&
                                 pnpm install --frozen-lockfile -q &&
-                                pnpm test -- --reporter=junit --outputFile=test-results.xml 2>&1
+                                pnpm vitest run --reporter=junit --outputFile=test-results.xml 2>&1
                             " | tee frontend/vitest-output.log
                     '''
                 }

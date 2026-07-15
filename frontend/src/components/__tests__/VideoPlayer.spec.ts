@@ -29,10 +29,14 @@ describe('VideoPlayer.vue', () => {
     expect(wrapper.find('.ctrl-btn.speed-btn').exists()).toBe(true)
   })
 
-  it('shows big play button when not playing', () => {
+  it('shows big play button when video is loaded and paused', async () => {
     const wrapper = mount(VideoPlayer, {
       props: { src: 'https://example.com/video.mp4' },
+      attachTo: document.body,
     })
+    const video = wrapper.find('video')
+    await video.trigger('loadedmetadata')
+    await video.trigger('canplay')
     expect(wrapper.find('.big-play').exists()).toBe(true)
   })
 
