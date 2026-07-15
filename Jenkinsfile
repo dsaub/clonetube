@@ -5,27 +5,6 @@ pipeline {
     }
 
     stages {
-        stage('Deep Debug') {
-        steps {
-        sh '''
-        echo "=== HOST ==="
-        hostname
-        cat /etc/os-release
-
-        echo "=== DOCKER ==="
-        find / -name docker -type f 2>/dev/null | head -50
-
-        echo "=== ROOT ==="
-        ls -la /
-
-        echo "=== USR BIN ==="
-        ls -la /usr/bin | grep docker || true
-
-        echo "=== PROCESS ==="
-        ps aux | head
-        '''
-    }
-}
         stage("Checkout") {
             steps {
                 sh 'git config --global --add safe.directory "*"'
@@ -35,6 +14,30 @@ pipeline {
                     userRemoteConfigs: [[url: 'https://github.com/dsaub/clonetube.git']]])
             }
         }
+
+        stage("Backend Tests") {
+            steps {
+                catchError(message: 'Backend tests completed with failures', buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    sh '''
+                        docker run --rm \\
+                            -v "$(pwd)/backend:/app" \\
+                            -w /app \\
+                            python:3.14-slim \\
+                            sh -c "
+                                pip install uv -q &&
+                                uv sync --group dev -q &&
+                                uv run pytest --junitxml=test-results.xml --tb=short -v
+                            "
+                    '''
+                }
+            }
+            post {
+                always {
+                    junit 'backend/test-results.xml'
+                }
+            }
+        }
+
         stage("Login with Docker") {
             steps {
                 withCredentials([
@@ -48,14 +51,14 @@ pipeline {
                 }
             }
         }
+
         stage("Backend Docker Image Build and Push") {
             steps {
-                
                 sh 'docker build -t ghcr.io/dsaub/clonetube-backend:latest backend'
-               
                 sh 'docker push ghcr.io/dsaub/clonetube-backend:latest'
             }
         }
+
         stage("Frontend Docker Image Build and Push") {
             steps {
                 sh 'docker build -t ghcr.io/dsaub/clonetube-frontend:latest frontend'

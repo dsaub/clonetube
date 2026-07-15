@@ -15,6 +15,8 @@ from pymodels import (
     StreamUrlResponse,
 )
 from settings import settings
+
+_BUCKET = settings.AWS_BUCKET_NAME
 from video_processor import ALLOWED_VIDEO_EXTENSIONS, is_valid_video_extension, transcode_to_mp4
 
 logger = logging.getLogger("routes.video")
@@ -126,7 +128,7 @@ async def sign_chunk(
         presigned_url = s3_client_public.generate_presigned_url(
             ClientMethod="upload_part",
             Params={
-                "Bucket": settings.BUCKET_NAME,
+                "Bucket": _BUCKET,
                 "Key": filename,
                 "UploadId": upload_id,
                 "PartNumber": chunk_number,
@@ -164,7 +166,7 @@ async def complete_multipart(body: CompleteMultipartBody, background_tasks: Back
         parts_list = [part.model_dump() for part in body.parts]
 
         response = s3_client.complete_multipart_upload(
-            Bucket=settings.BUCKET_NAME,
+            Bucket=_BUCKET,
             Key=body.filename,
             UploadId=body.uploadId,
             MultipartUpload={"Parts": parts_list},
@@ -204,7 +206,7 @@ async def _transcode_and_replace(key: str, original_filename: str | None = None)
         extra_args = {}
         if original_filename:
             extra_args["Metadata"] = {"original-filename": original_filename}
-        s3_client.upload_file(tmp_output, settings.BUCKET_NAME, key, ExtraArgs=extra_args)
+        s3_client.upload_file(tmp_output, _BUCKET, key, ExtraArgs=extra_args)
 
         logger.info("Transcoding complete for %s", key)
     except Exception:
@@ -240,7 +242,7 @@ async def list_videos():
     """Lista todos los objetos en el bucket S3 bajo el prefijo `videos/`."""
     try:
         paginator = s3_client.get_paginator("list_objects_v2")
-        pages = paginator.paginate(Bucket=settings.BUCKET_NAME, Prefix="videos/")
+        pages = paginator.paginate(Bucket=_BUCKET, Prefix="videos/")
 
         videos: list[VideoListItem] = []
         for page in pages:
@@ -249,7 +251,7 @@ async def list_videos():
                 if key.endswith("/"):
                     continue
 
-                head = s3_client.head_object(Bucket=settings.BUCKET_NAME, Key=key)
+                head = s3_client.head_object(Bucket=_BUCKET, Key=key)
                 original_filename = head.get("Metadata", {}).get(
                     "original-filename", key.rsplit("/", 1)[-1]
                 )
@@ -287,7 +289,7 @@ async def stream_url(
         url = s3_client_public.generate_presigned_url(
             ClientMethod="get_object",
             Params={
-                "Bucket": settings.BUCKET_NAME,
+                "Bucket": _BUCKET,
                 "Key": key,
             },
             ExpiresIn=86400,
