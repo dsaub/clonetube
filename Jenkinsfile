@@ -26,14 +26,37 @@ pipeline {
                             sh -c "
                                 pip install uv -q &&
                                 uv sync --group dev -q &&
-                                uv run pytest --junitxml=test-results.xml --tb=short -v
-                            "
+                                uv run pytest --junitxml=test-results.xml --tb=short -v 2>&1
+                            " | tee backend/pytest-output.log
                     '''
                 }
             }
             post {
                 always {
                     junit 'backend/test-results.xml'
+
+                    script {
+                        def warningsFile = 'backend/pytest-warnings.txt'
+                        sh """
+                            grep -iE '(warning|deprecation|deprecated)' backend/pytest-output.log 2>/dev/null | sort -u > $warningsFile || true
+                        """
+                        if (fileExists(warningsFile)) {
+                            def warnings = readFile(warningsFile).trim()
+                            if (warnings) {
+                                echo "=== PYTEST WARNINGS ==="
+                                echo warnings
+                                echo "========================"
+                            }
+                        }
+                    }
+
+                    archiveArtifacts artifacts: 'backend/pytest-output.log, backend/pytest-warnings.txt', allowEmptyArchive: true
+
+                    recordIssues(
+                        enabledForFailure: true,
+                        aggregatingResults: true,
+                        tools: [issues(pattern: 'backend/pytest-output.log', id: 'pytest', name: 'Pytest Warnings')]
+                    )
                 }
             }
         }
