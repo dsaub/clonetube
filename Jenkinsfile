@@ -5,6 +5,17 @@ pipeline {
     }
 
     stages {
+        stage('Debug') {
+            steps {
+                sh '''
+                whoami
+                pwd
+                echo $PATH
+                which docker || true
+                ls -l /usr/bin/docker || true
+                '''
+            }
+        }
         stage("Checkout") {
             steps {
                 sh 'git config --global --add safe.directory "*"'
