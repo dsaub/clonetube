@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -32,7 +32,7 @@ class MultipartUpload(SQLModel, table=True):
     original_filename: str
     owner_id: uuid.UUID = Field(nullable=False, foreign_key="user.id", index=True)
     status: str = Field(default="pending", nullable=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), nullable=False)
 
 
 class UserLikesVideo(SQLModel, table=True):

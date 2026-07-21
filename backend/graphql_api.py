@@ -292,8 +292,8 @@ schema = strawberry.Schema(
     query=Query,
     mutation=Mutation,
     extensions=[
-        strawberry.extensions.MaxTokensLimiter(max_token_count=1_000),
-        strawberry.extensions.QueryDepthLimiter(max_depth=10),
+        lambda maxtokens: strawberry.extensions.MaxTokensLimiter(max_token_count=1_000),
+        lambda querydepthlistener: strawberry.extensions.QueryDepthLimiter(max_depth=10),
     ],
 )
 graphql_router = GraphQLRouter(schema, context_getter=get_context)
