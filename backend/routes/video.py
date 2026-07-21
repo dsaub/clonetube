@@ -19,7 +19,7 @@ from pymodels import (
     StreamUrlResponse,
 )
 from settings import settings
-from .. import constants
+import constants
 from typing import Annotated
 
 _BUCKET = settings.AWS_BUCKET_NAME

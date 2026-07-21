@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 from strawberry.fastapi import GraphQLRouter
 from strawberry.types import Info
 
-from . import constants
+import constants
 
 from auth.security import create_access_token, hash_password, verify_password
 from auth.service import AuthenticationError, authenticate_token
