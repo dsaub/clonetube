@@ -11,6 +11,8 @@ from sqlmodel import Session, select
 from strawberry.fastapi import GraphQLRouter
 from strawberry.types import Info
 
+from . import constants
+
 from auth.security import create_access_token, hash_password, verify_password
 from auth.service import AuthenticationError, authenticate_token
 from clients import s3_client, s3_client_public
@@ -252,7 +254,7 @@ class Mutation:
         user = require_user(info)
         upload = _owned_upload(info, upload_id, key)
         if upload.status != "pending":
-            raise ValueError("Carga no encontrada")
+            raise ValueError(constants.LOAD_NOT_FOUND)
         s3_client.complete_multipart_upload(Bucket=settings.AWS_BUCKET_NAME, Key=key,
             UploadId=upload_id, MultipartUpload={"Parts": [
                 {"PartNumber": part.part_number, "ETag": part.etag} for part in parts]})
@@ -269,7 +271,7 @@ class Mutation:
     def cancel_multipart(self, info: Info[GraphQLContext, None], upload_id: str, key: str) -> bool:
         upload = _owned_upload(info, upload_id, key)
         if upload.status != "pending":
-            raise ValueError("Carga no encontrada")
+            raise ValueError(constants.LOAD_NOT_FOUND)
         s3_client.abort_multipart_upload(Bucket=settings.AWS_BUCKET_NAME, Key=key, UploadId=upload_id)
         upload.status = "cancelled"
         info.context.session.add(upload)
@@ -282,7 +284,7 @@ def _owned_upload(info: Info[GraphQLContext, None], upload_id: str, key: str) ->
     upload = info.context.session.exec(select(MultipartUpload).where(
         MultipartUpload.upload_id == upload_id, MultipartUpload.key == key)).first()
     if upload is None or upload.owner_id != user.id:
-        raise ValueError("Carga no encontrada")
+        raise ValueError(constants.LOAD_NOT_FOUND)
     return upload
 
 

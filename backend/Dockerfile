@@ -8,7 +8,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 # Copiamos los archivos de dependencias nativos de uv
 COPY pyproject.toml uv.lock ./
 
-RUN uv sync --no-dev
+RUN uv sync --no-dev --no-build --locked
 
 
 # --- Etapa 2: Imagen Final ---

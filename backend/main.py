@@ -29,7 +29,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS (permitir peticiones desde el frontend) ──
+# ── CORS (permitir peticiones desde el frontend) ──    
+app.add_middleware(GraphQLRateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,8 +38,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(GraphQLRateLimitMiddleware)
-
 # ── Routers ──
 app.include_router(auth_router)
 app.include_router(video_router)
