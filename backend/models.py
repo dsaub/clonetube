@@ -20,6 +20,20 @@ class Video(SQLModel, table=True):
     author: uuid.UUID = Field(nullable=False, foreign_key="user.id")
     video_name: str
     video_desc: str
+    is_published: bool = Field(default=False, nullable=False)
+
+
+class MultipartUpload(SQLModel, table=True):
+    """Carga S3 persistida, vinculada a su propietario."""
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    upload_id: str = Field(unique=True, index=True, nullable=False)
+    key: str = Field(unique=True, index=True, nullable=False)
+    original_filename: str
+    owner_id: uuid.UUID = Field(nullable=False, foreign_key="user.id", index=True)
+    status: str = Field(default="pending", nullable=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
 
 class UserLikesVideo(SQLModel, table=True):
     video_id: uuid.UUID = Field(nullable=False, primary_key=True, foreign_key="video.id")
