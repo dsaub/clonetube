@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import create_db_and_tables
+from graphql_api import GraphQLRateLimitMiddleware, graphql_router
 from routes.login import router as auth_router
 from routes.video import router as video_router
 
@@ -36,14 +37,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GraphQLRateLimitMiddleware)
 
 # ── Routers ──
 app.include_router(auth_router)
 app.include_router(video_router)
+app.include_router(graphql_router, prefix="/graphql")
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-

@@ -24,5 +24,8 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
+    # ─── GraphQL abuse controls ───────────────────
+    GRAPHQL_RATE_LIMIT_PER_MINUTE: int = 120
+
 
 settings = Settings()

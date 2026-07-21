@@ -2,7 +2,11 @@ import logging
 import os
 import tempfile
 import uuid
-from fastapi import APIRouter, BackgroundTasks, Query, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException
+from sqlmodel import Session, select
+from auth.dependencies import get_current_user
+from database import get_session
+from models import MultipartUpload, User, Video
 from clients import s3_client, s3_client_public
 from pymodels import (
     PartInfo,
@@ -22,11 +26,6 @@ from video_processor import ALLOWED_VIDEO_EXTENSIONS, is_valid_video_extension, 
 logger = logging.getLogger("routes.video")
 
 router = APIRouter(prefix="/api/v1/video", tags=["S3 Multipart Upload"])
-
-# Almacén en memoria del mapping: generated_key -> original_filename
-# TODO: migrar a base de datos cuando esté disponible.
-_filename_registry: dict[str, str] = {}
-
 
 def _generate_video_key(original_filename: str) -> str:
     """Genera una clave única para S3 a partir del nombre original."""
@@ -56,6 +55,8 @@ async def start_multipart(
         "El video se almacenará internamente con un UUID.",
         examples=["mi-video.mp4"],
     ),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ):
     """
     Inicia un multipart upload en S3 con clave aleatoria.
@@ -72,12 +73,16 @@ async def start_multipart(
 
     try:
         video_key = _generate_video_key(original_filename)
-        _filename_registry[video_key] = original_filename
-
         response = s3_client.create_multipart_upload(
             Bucket=settings.AWS_BUCKET_NAME,
             Key=video_key,
         )
+        upload = MultipartUpload(
+            upload_id=response["UploadId"], key=response["Key"],
+            original_filename=original_filename, owner_id=current_user.id,
+        )
+        session.add(upload)
+        session.commit()
         return StartMultipartResponse(
             uploadId=response["UploadId"],
             key=response["Key"],
@@ -116,6 +121,8 @@ async def sign_chunk(
         ge=1,
         examples=[1],
     ),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ):
     """
     Obtiene una URL prefirmada para subir un fragmento.
@@ -124,6 +131,12 @@ async def sign_chunk(
     - **upload_id**: ID del multipart upload.
     - **chunk_number**: número de parte (1‑based).
     """
+    upload = session.exec(select(MultipartUpload).where(
+        MultipartUpload.key == filename,
+        MultipartUpload.upload_id == upload_id,
+    )).first()
+    if upload is None or upload.owner_id != current_user.id or upload.status != "pending":
+        raise HTTPException(status_code=404, detail="Carga no encontrada")
     try:
         presigned_url = s3_client_public.generate_presigned_url(
             ClientMethod="upload_part",
@@ -154,7 +167,12 @@ async def sign_chunk(
         500: {"description": "Error al completar el multipart upload en S3"},
     },
 )
-async def complete_multipart(body: CompleteMultipartBody, background_tasks: BackgroundTasks):
+async def complete_multipart(
+    body: CompleteMultipartBody,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
     """
     Completa un multipart upload en S3 y lanza la transcodificación en segundo plano.
 
@@ -162,6 +180,12 @@ async def complete_multipart(body: CompleteMultipartBody, background_tasks: Back
     - **uploadId**: ID del multipart upload.
     - **parts**: lista de fragmentos subidos con su `PartNumber` y `ETag`.
     """
+    upload = session.exec(select(MultipartUpload).where(
+        MultipartUpload.key == body.filename,
+        MultipartUpload.upload_id == body.uploadId,
+    )).first()
+    if upload is None or upload.owner_id != current_user.id or upload.status != "pending":
+        raise HTTPException(status_code=404, detail="Carga no encontrada")
     try:
         parts_list = [part.model_dump() for part in body.parts]
 
@@ -171,7 +195,18 @@ async def complete_multipart(body: CompleteMultipartBody, background_tasks: Back
             UploadId=body.uploadId,
             MultipartUpload={"Parts": parts_list},
         )
-        original_filename = _filename_registry.pop(body.filename, None)
+        original_filename = upload.original_filename
+        upload.status = "completed"
+        video = Video(
+            filename=body.filename,
+            author=current_user.id,
+            video_name=original_filename,
+            video_desc="",
+            is_published=True,
+        )
+        session.add(upload)
+        session.add(video)
+        session.commit()
 
         location = response.get("Location") or ""
         location = _rewrite_public_url(location)
@@ -186,6 +221,28 @@ async def complete_multipart(body: CompleteMultipartBody, background_tasks: Back
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/cancel-multipart", summary="Cancelar carga multipart")
+async def cancel_multipart(
+    filename: str,
+    upload_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    upload = session.exec(select(MultipartUpload).where(
+        MultipartUpload.key == filename,
+        MultipartUpload.upload_id == upload_id,
+    )).first()
+    if upload is None or upload.owner_id != current_user.id or upload.status != "pending":
+        raise HTTPException(status_code=404, detail="Carga no encontrada")
+    s3_client.abort_multipart_upload(
+        Bucket=_BUCKET, Key=filename, UploadId=upload_id,
+    )
+    upload.status = "cancelled"
+    session.add(upload)
+    session.commit()
+    return {"status": "cancelled"}
 
 
 async def _transcode_and_replace(key: str, original_filename: str | None = None) -> None:
