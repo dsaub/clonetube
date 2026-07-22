@@ -9,6 +9,7 @@ global.fetch = mockFetch
 
 beforeEach(() => {
   mockFetch.mockReset()
+  localStorage.clear()
 })
 
 async function createRouterWithQuery(query: Record<string, string>) {
@@ -51,6 +52,38 @@ describe('WatchView.vue', () => {
 
     expect(wrapper.findComponent(VideoPlayer).exists()).toBe(true)
     expect(wrapper.findComponent(VideoPlayer).props('src')).toBe('https://stream.example.com/video.mp4')
+  })
+
+  it('shows the title, description and uploader returned by the video detail API', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ url: 'https://stream.example.com/video.mp4', key: 'videos/abc' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'video-1',
+          key: 'videos/abc',
+          title: 'Una emisión especial',
+          description: 'Descripción del contenido.',
+          author_id: 'user-1',
+          author_username: 'daniel',
+          author_name: 'Daniel',
+        }),
+      })
+
+    const router = await createRouterWithQuery({ key: 'videos/abc' })
+    const wrapper = mount(WatchView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('#watch-video-title').text()).toBe('Una emisión especial')
+    expect(wrapper.text()).toContain('Descripción del contenido.')
+    expect(wrapper.text()).toContain('Daniel')
+    expect(wrapper.text()).toContain('@daniel')
   })
 
   it('shows error when no key is provided', async () => {

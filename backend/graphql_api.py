@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from collections import defaultdict, deque
 from time import monotonic
 import uuid
@@ -8,7 +7,7 @@ from fastapi import Depends, Request, Response, status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
-from strawberry.fastapi import GraphQLRouter
+from strawberry.fastapi import BaseContext, GraphQLRouter
 from strawberry.types import Info
 
 import constants
@@ -16,21 +15,24 @@ import constants
 from auth.security import create_access_token, hash_password, verify_password
 from auth.service import AuthenticationError, authenticate_token
 from clients import s3_client, s3_client_public
-from database import get_session
+from database import get_graphql_session
 from models import MultipartUpload, User, Video
 from settings import settings
 from video_processor import is_valid_video_extension
 
 
-@dataclass
-class GraphQLContext:
-    session: Session
-    user: User | None
+class GraphQLContext(BaseContext):
+    """Contexto de Strawberry con la sesión y el usuario de Clonetube."""
+
+    def __init__(self, session: Session, user: User | None) -> None:
+        super().__init__()
+        self.session = session
+        self.user = user
 
 
-def get_context(
+async def get_context(
     request: Request,
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_graphql_session),
 ) -> GraphQLContext:
     """Autenticación opcional: las operaciones públicas no exigen JWT."""
     authorization = request.headers.get("Authorization", "")
@@ -75,7 +77,7 @@ class ChannelType:
     @strawberry.field
     def videos(self, info: Info[GraphQLContext, None]) -> list[VideoType]:
         rows = info.context.session.exec(select(Video).where(
-            Video.author == self.id, Video.is_published == True  # noqa: E712
+            Video.author == self.id, Video.visibility == "public"
         )).all()
         return [VideoType.from_model(video) for video in rows]
 
@@ -145,13 +147,13 @@ class Query:
 
     @strawberry.field
     def videos(self, info: Info[GraphQLContext, None]) -> list[VideoType]:
-        rows = info.context.session.exec(select(Video).where(Video.is_published == True)).all()  # noqa: E712
+        rows = info.context.session.exec(select(Video).where(Video.visibility == "public")).all()
         return [VideoType.from_model(video) for video in rows]
 
     @strawberry.field
     def video(self, info: Info[GraphQLContext, None], id: uuid.UUID) -> VideoType | None:
         video = info.context.session.get(Video, id)
-        if video is None or not video.is_published:
+        if video is None or video.visibility != "public":
             return None
         return VideoType.from_model(video)
 
@@ -209,6 +211,7 @@ class Mutation:
             video.video_desc = description
         if published is not None:
             video.is_published = published
+            video.visibility = "public" if published else "private"
         info.context.session.add(video)
         info.context.session.commit()
         info.context.session.refresh(video)
@@ -260,7 +263,7 @@ class Mutation:
                 {"PartNumber": part.part_number, "ETag": part.etag} for part in parts]})
         upload.status = "completed"
         video = Video(filename=key, author=user.id, video_name=upload.original_filename,
-                      video_desc="", is_published=False)
+                      video_desc="", is_published=True, visibility="public")
         info.context.session.add(upload)
         info.context.session.add(video)
         info.context.session.commit()
@@ -292,8 +295,8 @@ schema = strawberry.Schema(
     query=Query,
     mutation=Mutation,
     extensions=[
-        lambda maxtokens: strawberry.extensions.MaxTokensLimiter(max_token_count=1_000),
-        lambda querydepthlistener: strawberry.extensions.QueryDepthLimiter(max_depth=10),
+        lambda: strawberry.extensions.MaxTokensLimiter(max_token_count=1_000),
+        lambda: strawberry.extensions.QueryDepthLimiter(max_depth=10),
     ],
 )
 graphql_router = GraphQLRouter(schema, context_getter=get_context)

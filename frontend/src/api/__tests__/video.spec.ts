@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { listVideos, getStreamUrl } from '@/api/video'
+import {
+  completeMultipart,
+  getStreamUrl,
+  listVideos,
+  listVideosWithMetadata,
+  signChunk,
+  startMultipart,
+  updateVideoMetadataByKey,
+  uploadChunk,
+} from '@/api/video'
 
 const mockFetch = vi.fn()
 global.fetch = mockFetch
@@ -33,6 +42,95 @@ describe('listVideos', () => {
   })
 })
 
+describe('GraphQL video metadata', () => {
+  it('joins stored objects with their title, description and author', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          videos: [{
+            key: 'videos/abc',
+            size: 1234,
+            last_modified: '2026-07-21',
+            original_filename: 'original.mp4',
+          }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            videos: [{
+              id: 'video-1',
+              filename: 'videos/abc',
+              title: 'Título público',
+              description: 'Una descripción',
+              authorId: 'user-1',
+            }],
+            channels: [{ id: 'user-1', username: 'ana', displayName: 'Ana' }],
+          },
+        }),
+      })
+
+    const result = await listVideosWithMetadata()
+
+    expect(result[0]).toMatchObject({
+      title: 'Título público',
+      description: 'Una descripción',
+      author: { username: 'ana', displayName: 'Ana' },
+    })
+  })
+
+  it('finds the uploaded video and updates its metadata with authentication', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            videos: [{
+              id: '08cb6579-48f8-44c8-845c-e783d86f7584',
+              filename: 'videos/abc',
+              title: 'original.mp4',
+              description: '',
+              authorId: 'user-1',
+            }],
+            channels: [{ id: 'user-1', username: 'ana', displayName: 'Ana' }],
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            updateVideo: {
+              id: '08cb6579-48f8-44c8-845c-e783d86f7584',
+              filename: 'videos/abc',
+              title: 'Nuevo título',
+              description: 'Nueva descripción',
+              authorId: 'user-1',
+            },
+          },
+        }),
+      })
+
+    const updated = await updateVideoMetadataByKey(
+      'videos/abc',
+      'Nuevo título',
+      'Nueva descripción',
+      'token-123',
+    )
+
+    expect(updated.title).toBe('Nuevo título')
+    expect(mockFetch).toHaveBeenNthCalledWith(2, '/graphql', expect.objectContaining({
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer token-123',
+      },
+    }))
+  })
+})
+
 describe('getStreamUrl', () => {
   it('returns stream URL on success', async () => {
     mockFetch.mockResolvedValueOnce({
@@ -52,5 +150,84 @@ describe('getStreamUrl', () => {
     })
 
     await expect(getStreamUrl('videos/abc')).rejects.toThrow('Error al obtener URL de streaming')
+  })
+})
+
+describe('multipart upload', () => {
+  it('starts the upload through the proxy and sends the Bearer token', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        uploadId: 'upload-1',
+        key: 'videos/video-1.mp4',
+        original_filename: 'mi video.mp4',
+      }),
+    })
+
+    await startMultipart('mi video.mp4', 'token-123')
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/video/start-multipart?original_filename=mi+video.mp4',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer token-123' },
+      },
+    )
+  })
+
+  it('signs and uploads a chunk preserving the returned ETag', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ url: 'https://storage.example/chunk' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ ETag: '"etag-1"' }),
+      })
+
+    const url = await signChunk('videos/video-1.mp4', 'upload-1', 1, 'token-123')
+    const chunk = new Blob(['video data'])
+    const part = await uploadChunk(url, chunk, 1)
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/video/sign-chunk?filename=videos%2Fvideo-1.mp4&upload_id=upload-1&chunk_number=1',
+      { headers: { Authorization: 'Bearer token-123' } },
+    )
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'https://storage.example/chunk',
+      { method: 'PUT', body: chunk },
+    )
+    expect(part).toEqual({ PartNumber: 1, ETag: '"etag-1"' })
+  })
+
+  it('completes the multipart upload with the OpenAPI body shape', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        status: 'completed',
+        location: null,
+        key: 'videos/video-1.mp4',
+        original_filename: 'video.mp4',
+      }),
+    })
+
+    const parts = [{ PartNumber: 1, ETag: '"etag-1"' }]
+    await completeMultipart('videos/video-1.mp4', 'upload-1', parts, 'token-123')
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/video/complete-multipart', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer token-123',
+      },
+      body: JSON.stringify({
+        filename: 'videos/video-1.mp4',
+        uploadId: 'upload-1',
+        parts,
+      }),
+    })
   })
 })
