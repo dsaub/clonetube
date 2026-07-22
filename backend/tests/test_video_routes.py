@@ -1,6 +1,24 @@
 from sqlmodel import select
 
-from models import MultipartUpload
+from models import MultipartUpload, User, Video
+from routes.video import _can_view
+
+
+def test_video_visibility_access_matrix():
+    creator = User(username="creator", password_hash="x", full_name="Creator", email="c@example.com")
+    invited = User(username="invited", password_hash="x", full_name="Invited", email="i@example.com")
+    stranger = User(username="stranger", password_hash="x", full_name="Stranger", email="s@example.com")
+    video = Video(filename="videos/a.mp4", author=creator.id, video_name="A", video_desc="")
+
+    assert _can_view(video, None)
+    video.visibility = "unlisted"
+    assert _can_view(video, None)
+    video.visibility = "private"
+    video.allowed_users = '["invited"]'
+    assert _can_view(video, creator)
+    assert _can_view(video, invited)
+    assert not _can_view(video, stranger)
+    assert not _can_view(video, None)
 
 
 async def _start(client, mock_s3, auth_headers, filename="video.mp4"):
@@ -57,7 +75,12 @@ class TestPublicVideoReads:
         assert response.status_code == 200
         assert response.json() == {"videos": []}
 
-    async def test_stream_url_remains_public(self, client, mock_s3):
+    async def test_stream_url_remains_public(self, client, mock_s3, db_session):
+        user = User(username="author", password_hash="x", full_name="Author", email="a@example.com")
+        video = Video(filename="videos/a.mp4", author=user.id, video_name="A", video_desc="")
+        db_session.add(user)
+        db_session.add(video)
+        db_session.commit()
         mock_s3["s3_client_public"].generate_presigned_url.return_value = "https://stream"
         response = await client.get("/api/v1/video/stream-url", params={"key": "videos/a.mp4"})
         assert response.status_code == 200

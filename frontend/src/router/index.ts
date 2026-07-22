@@ -13,6 +13,16 @@ const router = createRouter({
       name: 'watch',
       component: () => import('@/views/WatchView.vue'),
     },
+    {
+      path: '/studio',
+      name: 'studio',
+      component: () => import('@/views/StudioView.vue'),
+    },
+    {
+      path: '/',
+      name: 'index',
+      component: () => import('@/views/IndexView.vue'),
+    },
   ],
 })
 

@@ -1,10 +1,12 @@
 import logging
+import json
 import os
 import tempfile
 import uuid
+from datetime import UTC, datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException
 from sqlmodel import Session, select
-from auth.dependencies import get_current_user
+from auth.dependencies import get_current_user, get_optional_user
 from database import get_session
 from models import MultipartUpload, User, Video
 from clients import s3_client, s3_client_public
@@ -16,6 +18,10 @@ from pymodels import (
     CompleteMultipartResponse,
     VideoListItem,
     VideoListResponse,
+    StudioVideoItem,
+    StudioVideoResponse,
+    VideoDetail,
+    VideoUpdate,
     StreamUrlResponse,
 )
 from settings import settings
@@ -207,6 +213,7 @@ async def complete_multipart(
             video_name=original_filename,
             video_desc="",
             is_published=True,
+            visibility="public",
         )
         session.add(upload)
         session.add(video)
@@ -299,9 +306,12 @@ def _rewrite_public_url(url: str) -> str:
         500: {"description": "Error al listar los videos en S3"},
     },
 )
-async def list_videos():
-    """Lista todos los objetos en el bucket S3 bajo el prefijo `videos/`."""
+async def list_videos(session: Annotated[Session, Depends(get_session)]):
+    """Lista únicamente los vídeos públicos."""
     try:
+        public_keys = set(session.exec(
+            select(Video.filename).where(Video.visibility == "public")
+        ).all())
         paginator = s3_client.get_paginator("list_objects_v2")
         pages = paginator.paginate(Bucket=_BUCKET, Prefix="videos/")
 
@@ -309,7 +319,7 @@ async def list_videos():
         for page in pages:
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                if key.endswith("/"):
+                if key.endswith("/") or key not in public_keys:
                     continue
 
                 head = s3_client.head_object(Bucket=_BUCKET, Key=key)
@@ -329,6 +339,110 @@ async def list_videos():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _allowed_usernames(video: Video) -> set[str]:
+    return set(json.loads(video.allowed_users))
+
+
+def _can_view(video: Video, user: User | None) -> bool:
+    return (
+        video.visibility in {"public", "unlisted"}
+        or user is not None
+        and (video.author == user.id or user.username in _allowed_usernames(video))
+    )
+
+
+def _find_accessible_video(session: Session, key: str, user: User | None) -> Video:
+    video = session.exec(select(Video).where(Video.filename == key)).first()
+    if video is None or not _can_view(video, user):
+        raise HTTPException(status_code=404, detail="Vídeo no encontrado")
+    return video
+
+
+@router.get("/detail", response_model=VideoDetail, summary="Obtener los datos de un vídeo")
+async def video_detail(
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User | None, Depends(get_optional_user)],
+    key: str,
+) -> VideoDetail:
+    video = _find_accessible_video(session, key, current_user)
+    author = session.get(User, video.author)
+    if author is None:
+        raise HTTPException(status_code=404, detail="Canal no encontrado")
+    return VideoDetail(
+        id=video.id, key=video.filename, title=video.video_name,
+        description=video.video_desc, visibility=video.visibility,
+        author_id=author.id, author_username=author.username, author_name=author.full_name,
+    )
+
+
+@router.get("/studio", response_model=StudioVideoResponse, summary="Listar mis vídeos")
+async def studio_videos(
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> StudioVideoResponse:
+    videos = session.exec(select(Video).where(Video.author == current_user.id)).all()
+    return StudioVideoResponse(videos=[_studio_item(video) for video in videos])
+
+
+def _studio_item(video: Video) -> StudioVideoItem:
+    try:
+        head = s3_client.head_object(Bucket=_BUCKET, Key=video.filename)
+    except Exception:
+        logger.warning("No se pudieron leer los metadatos S3 de %s", video.filename)
+        head = {}
+    return StudioVideoItem(
+        id=video.id, key=video.filename, size=head.get("ContentLength", 0),
+        last_modified=head.get("LastModified", datetime.now(UTC)).isoformat(),
+        original_filename=head.get("Metadata", {}).get("original-filename", video.video_name),
+        title=video.video_name, description=video.video_desc,
+        visibility=video.visibility, allowed_users=sorted(_allowed_usernames(video)),
+    )
+
+
+@router.patch("/{video_id}", response_model=StudioVideoItem, summary="Editar un vídeo")
+async def update_video(
+    video_id: uuid.UUID,
+    body: VideoUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> StudioVideoItem:
+    video = session.get(Video, video_id)
+    if video is None or video.author != current_user.id:
+        raise HTTPException(status_code=404, detail="Vídeo no encontrado")
+    allowed_users = sorted({username.strip() for username in body.allowed_users if username.strip()})
+    if body.visibility == "private" and allowed_users:
+        found = set(session.exec(select(User.username).where(User.username.in_(allowed_users))).all())
+        missing = sorted(set(allowed_users) - found)
+        if missing:
+            raise HTTPException(status_code=422, detail=f"Usuarios inexistentes: {', '.join(missing)}")
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="El título no puede estar vacío")
+    video.video_name = title
+    video.video_desc = body.description
+    video.visibility = body.visibility
+    video.allowed_users = json.dumps(allowed_users) if body.visibility == "private" else "[]"
+    video.is_published = body.visibility == "public"
+    session.add(video)
+    session.commit()
+    session.refresh(video)
+    return _studio_item(video)
+
+
+@router.delete("/{video_id}", status_code=204, summary="Eliminar un vídeo")
+async def delete_video(
+    video_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> None:
+    video = session.get(Video, video_id)
+    if video is None or video.author != current_user.id:
+        raise HTTPException(status_code=404, detail="Vídeo no encontrado")
+    s3_client.delete_object(Bucket=_BUCKET, Key=video.filename)
+    session.delete(video)
+    session.commit()
+
+
 @router.get(
     "/stream-url",
     summary="Obtener URL de streaming",
@@ -339,6 +453,8 @@ async def list_videos():
     },
 )
 async def stream_url(
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User | None, Depends(get_optional_user)],
     key: str = Query(
         ...,
         description="Key del video en S3 (ej: videos/abc123.mp4).",
@@ -346,6 +462,7 @@ async def stream_url(
     ),
 ):
     """Devuelve una URL prefirmada válida por 24h para streaming del video."""
+    _find_accessible_video(session, key, current_user)
     try:
         url = s3_client_public.generate_presigned_url(
             ClientMethod="get_object",

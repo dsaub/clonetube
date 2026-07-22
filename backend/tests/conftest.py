@@ -1,4 +1,4 @@
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlmodel import Session, SQLModel, create_engine
 
-from database import get_session
+from database import get_graphql_session, get_session
 from main import app as _app
 from models import User
 from settings import settings
@@ -17,6 +17,11 @@ _engine = create_engine(_TEST_DB_URL, echo=False)
 
 
 def _override_get_session() -> Generator[Session, None, None]:
+    with Session(_engine) as session:
+        yield session
+
+
+async def _override_get_graphql_session() -> AsyncGenerator[Session, None]:
     with Session(_engine) as session:
         yield session
 
@@ -39,6 +44,7 @@ def _setup_db() -> Generator[None, None, None]:
 @pytest.fixture
 def app() -> FastAPI:
     _app.dependency_overrides[get_session] = _override_get_session
+    _app.dependency_overrides[get_graphql_session] = _override_get_graphql_session
     return _app
 
 

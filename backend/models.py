@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Optional
 
+from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
 
 class User(SQLModel, table=True):
@@ -20,7 +21,13 @@ class Video(SQLModel, table=True):
     author: uuid.UUID = Field(nullable=False, foreign_key="user.id")
     video_name: str
     video_desc: str
-    is_published: bool = Field(default=False, nullable=False)
+    is_published: bool = Field(default=True, nullable=False)
+    visibility: str = Field(
+        default="public", max_length=16, nullable=False, index=True
+    )
+    allowed_users: str = Field(
+        default="[]", sa_column=Column(Text, nullable=False)
+    )
 
 
 class MultipartUpload(SQLModel, table=True):

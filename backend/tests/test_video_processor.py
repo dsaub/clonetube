@@ -1,6 +1,10 @@
 import pytest
 
-from video_processor import ALLOWED_VIDEO_EXTENSIONS, is_valid_video_extension
+from video_processor import (
+    ALLOWED_VIDEO_EXTENSIONS,
+    _select_video_encoder,
+    is_valid_video_extension,
+)
 
 
 class TestIsValidVideoExtension:
@@ -70,3 +74,22 @@ class TestIsValidVideoExtension:
 
     def test_no_duplicates(self):
         assert len(ALLOWED_VIDEO_EXTENSIONS) == 10
+
+
+class TestSelectVideoEncoder:
+    def test_prefers_libx264(self):
+        output = " V....D libopenh264 OpenH264\n V....D libx264 H.264"
+
+        assert _select_video_encoder(output) == ("libx264", "baseline")
+
+    def test_falls_back_to_libopenh264(self):
+        output = " V....D libopenh264 OpenH264 H.264 encoder"
+
+        assert _select_video_encoder(output) == (
+            "libopenh264",
+            "constrained_baseline",
+        )
+
+    def test_rejects_ffmpeg_without_software_h264_encoder(self):
+        with pytest.raises(RuntimeError, match="libx264 or libopenh264"):
+            _select_video_encoder(" V..... mpeg4 MPEG-4 part 2")

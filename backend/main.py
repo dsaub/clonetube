@@ -1,22 +1,9 @@
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import create_db_and_tables
 from graphql_api import GraphQLRateLimitMiddleware, graphql_router
 from routes.login import router as auth_router
 from routes.video import router as video_router
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Startup: crear tablas si no existen (útil en desarrollo)
-    create_db_and_tables()
-    yield
-    # Shutdown: el engine se limpia automáticamente al salir
-
 
 app = FastAPI(
     title="Clonetube API",
@@ -26,7 +13,6 @@ app = FastAPI(
         "así como autenticación mediante JWT."
     ),
     version="0.1.0",
-    lifespan=lifespan,
 )
 
 # ── CORS (permitir peticiones desde el frontend) ──    

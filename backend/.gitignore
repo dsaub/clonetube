@@ -11,3 +11,4 @@ wheels/
 
 # Test database
 test_clonetube.db
+.env

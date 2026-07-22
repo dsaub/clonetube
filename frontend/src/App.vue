@@ -1,7 +1,10 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import TvSignOutOverlay from '@/components/TvSignOutOverlay.vue';
+</script>
 
 <template>
   <RouterView />
+  <TvSignOutOverlay />
 </template>
 
 <style>

@@ -1,7 +1,7 @@
 import uuid
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 # ─── Multipart Upload ─────────────────────────────────────────────
@@ -45,6 +45,39 @@ class VideoListItem(BaseModel):
 
 class VideoListResponse(BaseModel):
     videos: List[VideoListItem]
+
+
+VideoVisibility = Literal["public", "unlisted", "private"]
+
+
+class StudioVideoItem(VideoListItem):
+    id: uuid.UUID
+    title: str
+    description: str
+    visibility: VideoVisibility
+    allowed_users: list[str]
+
+
+class StudioVideoResponse(BaseModel):
+    videos: list[StudioVideoItem]
+
+
+class VideoDetail(BaseModel):
+    id: uuid.UUID
+    key: str
+    title: str
+    description: str
+    visibility: VideoVisibility
+    author_id: uuid.UUID
+    author_username: str
+    author_name: str
+
+
+class VideoUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=5000)
+    visibility: VideoVisibility
+    allowed_users: list[str] = Field(default_factory=list, max_length=50)
 
 
 class StreamUrlResponse(BaseModel):
