@@ -159,30 +159,24 @@ describe('UploadModal.vue', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          data: {
-            videos: [{
-              id: '08cb6579-48f8-44c8-845c-e783d86f7584',
-              filename: videoKey,
-              title: 'test.mp4',
-              description: '',
-              authorId: 'user-1',
-            }],
-            channels: [{ id: 'user-1', username: 'ana', displayName: 'Ana' }],
-          },
+          videos: [{
+            id: '08cb6579-48f8-44c8-845c-e783d86f7584',
+            filename: videoKey,
+            title: 'test.mp4',
+            description: '',
+            author_id: 'user-1',
+            author_username: 'ana',
+            author_name: 'Ana',
+          }],
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          data: {
-            updateVideo: {
-              id: '08cb6579-48f8-44c8-845c-e783d86f7584',
-              filename: videoKey,
-              title: 'Mi estreno',
-              description: 'Una descripción elegida al subir.',
-              authorId: 'user-1',
-            },
-          },
+          id: '08cb6579-48f8-44c8-845c-e783d86f7584',
+          key: videoKey,
+          title: 'Mi estreno',
+          description: 'Una descripción elegida al subir.',
         }),
       })
 
@@ -198,11 +192,14 @@ describe('UploadModal.vue', () => {
 
     expect(wrapper.find('.result.success').exists()).toBe(true)
     expect(wrapper.find('.metadata-warning').exists()).toBe(false)
-    const mutationBody = JSON.parse(mockFetch.mock.calls[5]?.[1]?.body as string)
-    expect(mutationBody.variables).toEqual({
-      id: '08cb6579-48f8-44c8-845c-e783d86f7584',
+    const [updateUrl, updateInit] = mockFetch.mock.calls[5] ?? []
+    expect(updateUrl).toBe('/api/v1/video/08cb6579-48f8-44c8-845c-e783d86f7584')
+    expect(updateInit?.method).toBe('PATCH')
+    expect(JSON.parse(updateInit?.body as string)).toEqual({
       title: 'Mi estreno',
       description: 'Una descripción elegida al subir.',
+      visibility: 'public',
+      allowed_users: [],
     })
   })
 })
