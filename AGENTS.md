@@ -124,6 +124,25 @@ API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor
 | `POST` | `/api/v1/auth/forgot-password` | Solicita restablecimiento de contraseña. Genera token hash con expiracion de 15 min. |
 | `POST` | `/api/v1/auth/reset-password` | Restablece contraseña con token. Incrementa `password_version`. |
 | `GET` | `/api/v1/auth/me` | Devuelve datos del usuario autenticado. |
+| `GET` | `/api/v1/video/feed` | Feed personalizado. Prioriza a los autores seguidos; admite `limit` y `only_following`. |
+| `GET` | `/api/v1/users/{username}/follow` | Estado de seguimiento (auth opcional) y numero de seguidores. |
+| `POST` | `/api/v1/users/{username}/follow` | Seguir a un usuario (idempotente). |
+| `DELETE` | `/api/v1/users/{username}/follow` | Dejar de seguir a un usuario (idempotente). |
+| `GET` | `/api/v1/users/me/following` | Usuarios seguidos por el usuario autenticado. |
+
+### Algoritmo del feed (`feed.py`)
+
+Modulo puro, sin acceso a BD ni a S3, para poder probarlo aislado:
+
+- `recency_score`: decaimiento exponencial con semivida de 72 h.
+- `popularity_score`: `log1p(likes)`, crecimiento sublineal.
+- `score_candidate`: suma novedad, popularidad y `FOLLOW_BOOST`.
+- `rank_candidates`: los seguidos forman un bloque que va siempre delante
+  (criterio de orden, no sumando) y dentro de cada bloque una seleccion voraz
+  penaliza al autor que ya ha colocado videos (`AUTHOR_DIVERSITY_PENALTY`).
+  Los empates se resuelven por `video_id` para que el orden sea determinista.
+
+Las consultas de la relacion de seguimiento viven en `follows.py`.
 
 ### Analisis tecnico
 

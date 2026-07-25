@@ -3,6 +3,7 @@ import { ref, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getAccessibleVideoMetadataByKey, getStreamUrl, type VideoMetadata } from '@/api/video'
 import VideoPlayer from '@/components/VideoPlayer.vue'
+import FollowButton from '@/components/FollowButton.vue'
 
 const route = useRoute()
 
@@ -94,6 +95,7 @@ onMounted(() => {
                 <strong>{{ metadata.author.displayName }}</strong>
                 <small>@{{ metadata.author.username }}</small>
               </span>
+              <FollowButton :username="metadata.author.username" />
             </div>
           </div>
           <p v-if="metadata?.description" class="video-description">
@@ -178,6 +180,7 @@ onMounted(() => {
 .author-chip {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.65rem;
   color: #dfdeea;

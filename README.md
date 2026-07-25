@@ -73,6 +73,24 @@ clonetube/
 | `POST` | `/api/v1/video/start-multipart` | Inicia subida multipart a S3 |
 | `GET` | `/api/v1/video/sign-chunk` | Genera URL prefirmada por fragmento |
 | `POST` | `/api/v1/video/complete-multipart` | Completa la subida multipart |
+| `GET` | `/api/v1/video/feed` | Feed ordenado por el algoritmo de seguidores |
+| `GET` | `/api/v1/users/{username}/follow` | Estado de seguimiento y numero de seguidores |
+| `POST` | `/api/v1/users/{username}/follow` | Seguir a un usuario |
+| `DELETE` | `/api/v1/users/{username}/follow` | Dejar de seguir a un usuario |
+| `GET` | `/api/v1/users/me/following` | Lista de usuarios seguidos |
+
+### Algoritmo del feed
+
+`GET /api/v1/video/feed` prioriza a los canales que sigue el usuario autenticado:
+
+1. Los videos de autores seguidos forman un bloque que siempre va delante.
+2. Dentro de cada bloque puntua la novedad (decaimiento exponencial con semivida
+   de 72 h) y la popularidad (likes en escala logaritmica).
+3. Se penaliza cada video adicional del mismo autor para no monopolizar la
+   portada, sin que eso pueda colar a un desconocido por delante de un seguido.
+
+Con `?only_following=true` devuelve unicamente los videos de los canales
+seguidos. La logica vive en `backend/feed.py` (modulo puro y testeado).
 
 ## CI/CD
 

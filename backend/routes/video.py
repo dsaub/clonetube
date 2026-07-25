@@ -5,10 +5,12 @@ import tempfile
 import uuid
 from datetime import UTC, datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
+import follows
 from auth.dependencies import get_current_user, get_optional_user
 from database import get_session
-from models import MultipartUpload, User, Video
+from feed import FeedCandidate, ScoredVideo, ensure_utc, rank_candidates
+from models import MultipartUpload, User, UserLikesVideo, Video
 from clients import s3_client, s3_client_public
 from pymodels import (
     PartInfo,
@@ -16,6 +18,8 @@ from pymodels import (
     StartMultipartResponse,
     SignChunkResponse,
     CompleteMultipartResponse,
+    FeedResponse,
+    FeedVideoItem,
     VideoListItem,
     VideoListResponse,
     StudioVideoItem,
@@ -361,6 +365,80 @@ async def video_catalog(session: Annotated[Session, Depends(get_session)]) -> Vi
         )
         for video, author in rows
     ])
+
+
+@router.get(
+    "/feed",
+    response_model=FeedResponse,
+    summary="Feed personalizado",
+    description=(
+        "Devuelve los vídeos públicos ordenados por el algoritmo de recomendación: "
+        "los autores que sigue el usuario autenticado suben posiciones, y a igualdad "
+        "de seguimiento mandan la novedad y los likes. Sin token devuelve el mismo "
+        "listado sin personalizar."
+    ),
+)
+async def video_feed(
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User | None, Depends(get_optional_user)],
+    limit: int = Query(default=50, ge=1, le=200, description="Número máximo de vídeos."),
+    only_following: bool = Query(
+        default=False,
+        description="Si es `true`, devuelve solo vídeos de los autores seguidos.",
+    ),
+) -> FeedResponse:
+    following = follows.followed_ids(session, current_user.id) if current_user else set()
+
+    rows = session.exec(
+        select(Video, User)
+        .join(User, User.id == Video.author)
+        .where(Video.visibility == "public")
+    ).all()
+    if only_following:
+        rows = [row for row in rows if row[0].author in following]
+
+    likes = _likes_by_video(session)
+    videos = {video.id: (video, author) for video, author in rows}
+    candidates = [
+        FeedCandidate(
+            video_id=video.id,
+            author_id=video.author,
+            created_at=video.created_at,
+            likes=likes.get(video.id, 0),
+        )
+        for video, _ in rows
+    ]
+
+    ranked = rank_candidates(candidates, following, datetime.now(UTC), limit=limit)
+    return FeedResponse(
+        videos=[_feed_item(*videos[item.candidate.video_id], item) for item in ranked],
+        following_count=len(following),
+        personalized=bool(following),
+    )
+
+
+def _likes_by_video(session: Session) -> dict[uuid.UUID, int]:
+    rows = session.exec(
+        select(UserLikesVideo.video_id, func.count())
+        .group_by(UserLikesVideo.video_id)
+    ).all()
+    return {video_id: count for video_id, count in rows}
+
+
+def _feed_item(video: Video, author: User, scored: ScoredVideo) -> FeedVideoItem:
+    return FeedVideoItem(
+        id=video.id,
+        filename=video.filename,
+        title=video.video_name,
+        description=video.video_desc,
+        author_id=author.id,
+        author_username=author.username,
+        author_name=author.full_name,
+        created_at=ensure_utc(video.created_at).isoformat(),
+        likes=scored.candidate.likes,
+        score=round(scored.score, 6),
+        from_followed_author=scored.from_followed_author,
+    )
 
 
 def _allowed_usernames(video: Video) -> set[str]:
