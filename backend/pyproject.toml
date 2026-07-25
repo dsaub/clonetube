@@ -13,7 +13,6 @@ dependencies = [
     "pyjwt[crypto]>=2.10.0",
     "pymysql>=1.1.1",
     "sqlmodel>=0.0.39",
-    "strawberry-graphql[fastapi]==0.322.2",
 ]
 
 [dependency-groups]

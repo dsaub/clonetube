@@ -20,6 +20,8 @@ from pymodels import (
     VideoListResponse,
     StudioVideoItem,
     StudioVideoResponse,
+    VideoCatalogItem,
+    VideoCatalogResponse,
     VideoDetail,
     VideoUpdate,
     StreamUrlResponse,
@@ -337,6 +339,28 @@ async def list_videos(session: Annotated[Session, Depends(get_session)]):
         return VideoListResponse(videos=videos)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/catalog",
+    response_model=VideoCatalogResponse,
+    summary="Listar metadatos públicos de vídeos",
+    description="Devuelve el título, descripción y autor de cada vídeo público.",
+)
+async def video_catalog(session: Annotated[Session, Depends(get_session)]) -> VideoCatalogResponse:
+    rows = session.exec(
+        select(Video, User)
+        .join(User, User.id == Video.author)
+        .where(Video.visibility == "public")
+    ).all()
+    return VideoCatalogResponse(videos=[
+        VideoCatalogItem(
+            id=video.id, filename=video.filename, title=video.video_name,
+            description=video.video_desc, author_id=author.id,
+            author_username=author.username, author_name=author.full_name,
+        )
+        for video, author in rows
+    ])
 
 
 def _allowed_usernames(video: Video) -> set[str]:

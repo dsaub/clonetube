@@ -1,5 +1,4 @@
 const API = '/api/v1/video'
-const GRAPHQL_API = '/graphql'
 
 export interface VideoListItem {
   key: string
@@ -80,39 +79,6 @@ function errorMessage(response: Response, context: string): Error {
   return new Error(`${context}${status}`)
 }
 
-interface GraphQLError {
-  message: string
-}
-
-interface GraphQLResponse<T> {
-  data?: T
-  errors?: GraphQLError[]
-}
-
-async function graphqlRequest<T>(
-  query: string,
-  variables: Record<string, unknown> = {},
-  token?: string,
-): Promise<T> {
-  const response = await fetch(GRAPHQL_API, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...withBearer(token),
-    },
-    body: JSON.stringify({ query, variables }),
-  })
-
-  if (!response.ok) throw errorMessage(response, 'Error al consultar los datos de video')
-
-  const result = await response.json() as GraphQLResponse<T>
-  if (result.errors?.length) {
-    throw new Error(result.errors.map(({ message }) => message).join('. '))
-  }
-  if (!result.data) throw new Error('La API no devolvió datos de video')
-  return result.data
-}
-
 export async function listVideos(): Promise<VideoListItem[]> {
   const response = await fetch(`${API}/list`)
   if (!response.ok) throw errorMessage(response, 'Error al listar videos')
@@ -121,31 +87,32 @@ export async function listVideos(): Promise<VideoListItem[]> {
   return data.videos
 }
 
-export async function listVideoMetadata(): Promise<VideoMetadata[]> {
-  const data = await graphqlRequest<{
-    videos: Omit<VideoMetadata, 'author'>[]
-    channels: VideoAuthor[]
-  }>(`
-    query VideoCatalog {
-      videos {
-        id
-        filename
-        title
-        description
-        authorId
-      }
-      channels {
-        id
-        username
-        displayName
-      }
-    }
-  `)
+interface VideoCatalogApiItem {
+  id: string
+  filename: string
+  title: string
+  description: string
+  author_id: string
+  author_username: string
+  author_name: string
+}
 
-  const authors = new Map(data.channels.map((channel) => [channel.id, channel]))
+export async function listVideoMetadata(): Promise<VideoMetadata[]> {
+  const response = await fetch(`${API}/catalog`)
+  if (!response.ok) throw errorMessage(response, 'Error al consultar los datos de video')
+
+  const data = await response.json() as { videos: VideoCatalogApiItem[] }
   return data.videos.map((video) => ({
-    ...video,
-    author: authors.get(video.authorId) ?? null,
+    id: video.id,
+    filename: video.filename,
+    title: video.title,
+    description: video.description,
+    authorId: video.author_id,
+    author: {
+      id: video.author_id,
+      username: video.author_username,
+      displayName: video.author_name,
+    },
   }))
 }
 
@@ -212,23 +179,22 @@ export async function updateVideoMetadataByKey(
   const current = await getVideoMetadataByKey(key)
   if (!current) throw new Error('No se encontró el video recién subido en la base de datos')
 
-  const data = await graphqlRequest<{ updateVideo: Omit<VideoMetadata, 'author'> }>(`
-    mutation UpdateVideoMetadata($id: UUID!, $title: String!, $description: String!) {
-      updateVideo(id: $id, title: $title, description: $description) {
-        id
-        filename
-        title
-        description
-        authorId
-      }
-    }
-  `, {
-    id: current.id,
-    title,
-    description,
-  }, token)
+  const response = await fetch(`${API}/${current.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...withBearer(token) },
+    body: JSON.stringify({ title, description, visibility: 'public', allowed_users: [] }),
+  })
+  if (!response.ok) throw errorMessage(response, 'Error al guardar los datos del video')
 
-  return { ...data.updateVideo, author: current.author }
+  const updated = await response.json() as { id: string; key: string; title: string; description: string }
+  return {
+    id: updated.id,
+    filename: updated.key,
+    title: updated.title,
+    description: updated.description,
+    authorId: current.authorId,
+    author: current.author,
+  }
 }
 
 export async function getStreamUrl(key: string, token?: string): Promise<string> {

@@ -42,7 +42,7 @@ describe('listVideos', () => {
   })
 })
 
-describe('GraphQL video metadata', () => {
+describe('video catalog metadata', () => {
   it('joins stored objects with their title, description and author', async () => {
     mockFetch
       .mockResolvedValueOnce({
@@ -59,16 +59,15 @@ describe('GraphQL video metadata', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          data: {
-            videos: [{
-              id: 'video-1',
-              filename: 'videos/abc',
-              title: 'Título público',
-              description: 'Una descripción',
-              authorId: 'user-1',
-            }],
-            channels: [{ id: 'user-1', username: 'ana', displayName: 'Ana' }],
-          },
+          videos: [{
+            id: 'video-1',
+            filename: 'videos/abc',
+            title: 'Título público',
+            description: 'Una descripción',
+            author_id: 'user-1',
+            author_username: 'ana',
+            author_name: 'Ana',
+          }],
         }),
       })
 
@@ -79,6 +78,7 @@ describe('GraphQL video metadata', () => {
       description: 'Una descripción',
       author: { username: 'ana', displayName: 'Ana' },
     })
+    expect(mockFetch).toHaveBeenNthCalledWith(2, '/api/v1/video/catalog')
   })
 
   it('finds the uploaded video and updates its metadata with authentication', async () => {
@@ -86,30 +86,29 @@ describe('GraphQL video metadata', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          data: {
-            videos: [{
-              id: '08cb6579-48f8-44c8-845c-e783d86f7584',
-              filename: 'videos/abc',
-              title: 'original.mp4',
-              description: '',
-              authorId: 'user-1',
-            }],
-            channels: [{ id: 'user-1', username: 'ana', displayName: 'Ana' }],
-          },
+          videos: [{
+            id: '08cb6579-48f8-44c8-845c-e783d86f7584',
+            filename: 'videos/abc',
+            title: 'original.mp4',
+            description: '',
+            author_id: 'user-1',
+            author_username: 'ana',
+            author_name: 'Ana',
+          }],
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          data: {
-            updateVideo: {
-              id: '08cb6579-48f8-44c8-845c-e783d86f7584',
-              filename: 'videos/abc',
-              title: 'Nuevo título',
-              description: 'Nueva descripción',
-              authorId: 'user-1',
-            },
-          },
+          id: '08cb6579-48f8-44c8-845c-e783d86f7584',
+          key: 'videos/abc',
+          size: 1234,
+          last_modified: '2026-07-21',
+          original_filename: 'original.mp4',
+          title: 'Nuevo título',
+          description: 'Nueva descripción',
+          visibility: 'public',
+          allowed_users: [],
         }),
       })
 
@@ -121,13 +120,23 @@ describe('GraphQL video metadata', () => {
     )
 
     expect(updated.title).toBe('Nuevo título')
-    expect(mockFetch).toHaveBeenNthCalledWith(2, '/graphql', expect.objectContaining({
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer token-123',
-      },
-    }))
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/video/08cb6579-48f8-44c8-845c-e783d86f7584',
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer token-123',
+        },
+        body: JSON.stringify({
+          title: 'Nuevo título',
+          description: 'Nueva descripción',
+          visibility: 'public',
+          allowed_users: [],
+        }),
+      }),
+    )
   })
 })
 

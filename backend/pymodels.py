@@ -62,6 +62,20 @@ class StudioVideoResponse(BaseModel):
     videos: list[StudioVideoItem]
 
 
+class VideoCatalogItem(BaseModel):
+    id: uuid.UUID
+    filename: str
+    title: str
+    description: str
+    author_id: uuid.UUID
+    author_username: str
+    author_name: str
+
+
+class VideoCatalogResponse(BaseModel):
+    videos: list[VideoCatalogItem]
+
+
 class VideoDetail(BaseModel):
     id: uuid.UUID
     key: str
