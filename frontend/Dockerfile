@@ -13,7 +13,8 @@ COPY . .
 
 RUN pnpm run build
 
-ADD https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_linux_amd64.tar.gz /tmp/caddy.tar.gz
+ARG TARGETARCH
+ADD https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_linux_${TARGETARCH}.tar.gz /tmp/caddy.tar.gz
 RUN tar xzf /tmp/caddy.tar.gz -C /usr/local/bin caddy && chmod +x /usr/local/bin/caddy
 
 RUN mkdir -p /etc/caddy && \
