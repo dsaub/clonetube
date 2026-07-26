@@ -3,17 +3,22 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from httpx import AsyncClient
 from sqlmodel import Session
 
 from models import User, Video
 
-CREATOR = {
-    "username": "creator",
-    "password": "Str0ng!Pass",
-    "full_name": "Creadora",
-    "email": "creator@example.com",
-}
+
+@pytest.fixture
+def creator(user_payload: dict[str, str]) -> dict[str, str]:
+    """Segundo usuario del que cuelga el canal, con las credenciales de prueba."""
+    return {
+        **user_payload,
+        "username": "creator",
+        "full_name": "Creadora",
+        "email": "creator@example.com",
+    }
 
 
 async def _register(client: AsyncClient, payload: dict[str, str]) -> dict[str, str]:
@@ -50,8 +55,10 @@ def _add_videos(
 
 
 class TestChannelProfile:
-    async def test_returns_the_public_profile(self, client: AsyncClient, db_session: Session):
-        await _register(client, CREATOR)
+    async def test_returns_the_public_profile(
+        self, creator: dict[str, str], client: AsyncClient
+    ):
+        await _register(client, creator)
 
         response = await client.get("/api/v1/users/creator/channel")
 
@@ -65,9 +72,13 @@ class TestChannelProfile:
         assert body["video_count"] == 0
 
     async def test_counts_followers_and_videos(
-        self, client: AsyncClient, db_session: Session, auth_headers: dict[str, str]
+        self,
+        creator: dict[str, str],
+        client: AsyncClient,
+        db_session: Session,
+        auth_headers: dict[str, str],
     ):
-        await _register(client, CREATOR)
+        await _register(client, creator)
         await client.post("/api/v1/users/creator/follow", headers=auth_headers)
         _add_videos(db_session, _author_id(db_session, "creator"), 3)
 
@@ -85,9 +96,9 @@ class TestChannelProfile:
 
 class TestChannelVideos:
     async def test_pages_have_twenty_videos_by_default(
-        self, client: AsyncClient, db_session: Session
+        self, creator: dict[str, str], client: AsyncClient, db_session: Session
     ):
-        await _register(client, CREATOR)
+        await _register(client, creator)
         _add_videos(db_session, _author_id(db_session, "creator"), 25)
 
         response = await client.get("/api/v1/users/creator/videos")
@@ -104,9 +115,9 @@ class TestChannelVideos:
         }
 
     async def test_second_page_returns_the_rest_without_repeating(
-        self, client: AsyncClient, db_session: Session
+        self, creator: dict[str, str], client: AsyncClient, db_session: Session
     ):
-        await _register(client, CREATOR)
+        await _register(client, creator)
         _add_videos(db_session, _author_id(db_session, "creator"), 25)
 
         first = await client.get("/api/v1/users/creator/videos")
@@ -117,8 +128,10 @@ class TestChannelVideos:
         second_keys = {video["key"] for video in second.json()["videos"]}
         assert first_keys.isdisjoint(second_keys)
 
-    async def test_orders_from_newest_to_oldest(self, client: AsyncClient, db_session: Session):
-        await _register(client, CREATOR)
+    async def test_orders_from_newest_to_oldest(
+        self, creator: dict[str, str], client: AsyncClient, db_session: Session
+    ):
+        await _register(client, creator)
         _add_videos(db_session, _author_id(db_session, "creator"), 3)
 
         response = await client.get("/api/v1/users/creator/videos")
@@ -128,9 +141,9 @@ class TestChannelVideos:
         ]
 
     async def test_page_beyond_the_last_one_is_empty(
-        self, client: AsyncClient, db_session: Session
+        self, creator: dict[str, str], client: AsyncClient, db_session: Session
     ):
-        await _register(client, CREATOR)
+        await _register(client, creator)
         _add_videos(db_session, _author_id(db_session, "creator"), 3)
 
         response = await client.get("/api/v1/users/creator/videos", params={"page": 9})
@@ -138,8 +151,10 @@ class TestChannelVideos:
         assert response.json()["videos"] == []
         assert response.json()["pages"] == 1
 
-    async def test_an_empty_channel_still_has_one_page(self, client: AsyncClient):
-        await _register(client, CREATOR)
+    async def test_an_empty_channel_still_has_one_page(
+        self, creator: dict[str, str], client: AsyncClient
+    ):
+        await _register(client, creator)
 
         response = await client.get("/api/v1/users/creator/videos")
 
@@ -148,9 +163,13 @@ class TestChannelVideos:
         }
 
     async def test_visitors_do_not_see_private_or_unlisted_videos(
-        self, client: AsyncClient, db_session: Session, auth_headers: dict[str, str]
+        self,
+        creator: dict[str, str],
+        client: AsyncClient,
+        db_session: Session,
+        auth_headers: dict[str, str],
     ):
-        await _register(client, CREATOR)
+        await _register(client, creator)
         author_id = _author_id(db_session, "creator")
         _add_videos(db_session, author_id, 1)
         _add_videos(db_session, author_id, 1, visibility="private", prefix="privado")
@@ -163,9 +182,9 @@ class TestChannelVideos:
         assert body["total"] == 1
 
     async def test_the_owner_sees_the_whole_channel(
-        self, client: AsyncClient, db_session: Session
+        self, creator: dict[str, str], client: AsyncClient, db_session: Session
     ):
-        headers = await _register(client, CREATOR)
+        headers = await _register(client, creator)
         author_id = _author_id(db_session, "creator")
         _add_videos(db_session, author_id, 1)
         _add_videos(db_session, author_id, 1, visibility="private", prefix="privado")
@@ -176,15 +195,15 @@ class TestChannelVideos:
         assert body["total"] == 2
         assert {video["visibility"] for video in body["videos"]} == {"public", "private"}
 
-    async def test_rejects_an_invalid_page(self, client: AsyncClient):
-        await _register(client, CREATOR)
+    async def test_rejects_an_invalid_page(self, creator: dict[str, str], client: AsyncClient):
+        await _register(client, creator)
 
         response = await client.get("/api/v1/users/creator/videos", params={"page": 0})
 
         assert response.status_code == 422
 
-    async def test_rejects_an_oversized_page(self, client: AsyncClient):
-        await _register(client, CREATOR)
+    async def test_rejects_an_oversized_page(self, creator: dict[str, str], client: AsyncClient):
+        await _register(client, creator)
 
         response = await client.get("/api/v1/users/creator/videos", params={"page_size": 500})
 
