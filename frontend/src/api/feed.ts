@@ -63,7 +63,7 @@ export async function fetchFeed(token?: string, options: FeedOptions = {}): Prom
 
 /**
  * Feed personalizado listo para pintar: mantiene el orden que decide el backend
- * y le añade el tamaño real de cada objeto en S3.
+ * y le añade el tamaño real de cada vídeo almacenado.
  */
 export async function listFeedVideos(
   token?: string,

@@ -4,7 +4,6 @@ import TvModalShell from '@/components/TvModalShell.vue'
 import {
   cancelMultipart,
   completeMultipart,
-  signChunk,
   startMultipart,
   updateVideoMetadataByKey,
   uploadChunk,
@@ -25,7 +24,6 @@ const uploadId = ref('')
 const videoKey = ref('')
 const originalFilename = ref('')
 const errorMsg = ref('')
-const resultLocation = ref('')
 const metadataWarning = ref('')
 const logs = ref<string[]>([])
 const activeChunk = ref(0)
@@ -82,7 +80,6 @@ function onFileSelected(e: Event) {
     totalChunks.value = 0
     logs.value = []
     errorMsg.value = ''
-    resultLocation.value = ''
     metadataWarning.value = ''
   }
 }
@@ -99,14 +96,13 @@ async function startUpload() {
   const token = getAccessToken()
 
   try {
-    // ── 1. Iniciar multipart upload ──────────────────────────────
-    log('Iniciando multipart upload…')
+    // ── 1. Reservar la subida en Clonetube ───────────────────────
+    log('Preparando la subida…')
     const startData = await startMultipart(file.name, token)
     uploadId.value = startData.uploadId
     videoKey.value = startData.key
     originalFilename.value = startData.original_filename
-    log(`Upload iniciado — ID: ${uploadId.value.slice(0, 12)}…`)
-    log(`Key S3: ${videoKey.value}`)
+    log('Subida preparada en Clonetube.')
 
     // ── 2. Dividir en fragmentos y subir ─────────────────────────
     totalChunks.value = Math.ceil(file.size / CHUNK_SIZE)
@@ -121,24 +117,17 @@ async function startUpload() {
       const end = Math.min(start + CHUNK_SIZE, file.size)
       const chunk = new Blob([file.slice(start, end)])
 
-      // ── 2a. Obtener URL prefirmada ─────────────────
-      log(`Fragmento ${chunkNumber}/${totalChunks.value}: obteniendo URL…`)
-      const presignedUrl = await signChunk(videoKey.value, uploadId.value, chunkNumber, token)
-
-      // ── 2b. Subir fragmento a S3 ───────────────────
       log(`Fragmento ${chunkNumber}/${totalChunks.value}: emitiendo datos…`)
-      const part = await uploadChunk(presignedUrl, chunk, chunkNumber)
+      const part = await uploadChunk(videoKey.value, uploadId.value, chunkNumber, chunk, token)
       parts.push(part)
       sentBytes.value = end
-      log(`Fragmento ${chunkNumber}/${totalChunks.value}: OK (ETag: ${part.ETag.slice(0, 12)}…)`)
+      log(`Fragmento ${chunkNumber}/${totalChunks.value}: recibido.`)
     }
 
-    // ── 3. Completar multipart upload ────────────────────────────
-    log('Completando multipart upload…')
+    // ── 3. Ensamblar el vídeo ────────────────────────────────────
+    log('Finalizando la subida…')
     const completeData = await completeMultipart(videoKey.value, uploadId.value, parts, token)
-    resultLocation.value = completeData.location ?? '—'
     log('¡Carga completada con éxito!')
-    log(`Location: ${resultLocation.value}`)
 
     if (token) {
       try {
@@ -192,7 +181,6 @@ function reset() {
   videoKey.value = ''
   originalFilename.value = ''
   errorMsg.value = ''
-  resultLocation.value = ''
   metadataWarning.value = ''
   logs.value = []
 }
@@ -260,7 +248,7 @@ function reset() {
             :disabled="!canStartUpload"
             @click="startUpload"
           >
-            🚀 Subir a S3
+            🚀 Subir a Clonetube
           </button>
         </div>
 
@@ -284,7 +272,7 @@ function reset() {
             </div>
             <div class="transmission-node cloud-node">
               <span class="node-icon">☁</span>
-              <small>S3</small>
+              <small>Clonetube</small>
             </div>
           </div>
           <div class="transfer-stats" aria-live="polite">
@@ -307,9 +295,7 @@ function reset() {
           <div class="result-details">
             <p><strong>Título:</strong> {{ videoTitle }}</p>
             <p v-if="videoDescription"><strong>Descripción:</strong> {{ videoDescription }}</p>
-            <p><strong>Nombre original:</strong> {{ originalFilename }}</p>
-            <p><strong>Key S3:</strong> <code>{{ videoKey }}</code></p>
-            <p><strong>Location:</strong> <code class="loc">{{ resultLocation }}</code></p>
+            <p><strong>Archivo:</strong> {{ originalFilename }}</p>
           </div>
           <div class="logs">
             <p v-for="(line, i) in logs" :key="i" class="log-line">{{ line }}</p>
@@ -609,14 +595,6 @@ function reset() {
 .result h3 { margin: 0 0 0.75rem; }
 .result-details { text-align: left; background: #0f0f1a; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; }
 .result-details p { margin: 0.35rem 0; font-size: 0.9rem; }
-.result-details code {
-  background: #2a2a4a;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.82rem;
-  word-break: break-all;
-}
-.result-details .loc { font-size: 0.75rem; }
 .error-msg { color: #ff6b6b; font-weight: 500; }
 .metadata-warning { margin-bottom: 0.75rem; color: #ffd080; font-size: 0.86rem; line-height: 1.5; }
 

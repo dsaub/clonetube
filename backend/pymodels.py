@@ -29,6 +29,11 @@ class SignChunkResponse(BaseModel):
     url: str
 
 
+class UploadChunkResponse(BaseModel):
+    PartNumber: int
+    ETag: str
+
+
 class CompleteMultipartResponse(BaseModel):
     status: str
     location: Optional[str] = None
