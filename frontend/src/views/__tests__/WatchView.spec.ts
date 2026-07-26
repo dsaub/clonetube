@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
+import { createPinia } from 'pinia'
 import WatchView from '@/views/WatchView.vue'
 import VideoPlayer from '@/components/VideoPlayer.vue'
 
@@ -31,7 +32,7 @@ describe('WatchView.vue', () => {
 
     const router = await createRouterWithQuery({ key: 'videos/abc' })
     const wrapper = mount(WatchView, {
-      global: { plugins: [router] },
+      global: { plugins: [router, createPinia()] },
     })
 
     expect(wrapper.text()).toContain('Cargando video')
@@ -45,7 +46,7 @@ describe('WatchView.vue', () => {
 
     const router = await createRouterWithQuery({ key: 'videos/abc' })
     const wrapper = mount(WatchView, {
-      global: { plugins: [router] },
+      global: { plugins: [router, createPinia()] },
     })
 
     await flushPromises()
@@ -75,7 +76,7 @@ describe('WatchView.vue', () => {
 
     const router = await createRouterWithQuery({ key: 'videos/abc' })
     const wrapper = mount(WatchView, {
-      global: { plugins: [router] },
+      global: { plugins: [router, createPinia()] },
     })
 
     await flushPromises()
@@ -89,7 +90,7 @@ describe('WatchView.vue', () => {
   it('shows error when no key is provided', async () => {
     const router = await createRouterWithQuery({})
     const wrapper = mount(WatchView, {
-      global: { plugins: [router] },
+      global: { plugins: [router, createPinia()] },
     })
 
     await flushPromises()
@@ -102,7 +103,7 @@ describe('WatchView.vue', () => {
 
     const router = await createRouterWithQuery({ key: 'videos/abc' })
     const wrapper = mount(WatchView, {
-      global: { plugins: [router] },
+      global: { plugins: [router, createPinia()] },
     })
 
     await flushPromises()

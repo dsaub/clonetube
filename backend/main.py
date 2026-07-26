@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routes.login import router as auth_router
+from routes.social import router as social_router
 from routes.video import router as video_router
 
 app = FastAPI(
@@ -24,6 +25,7 @@ app.add_middleware(
 )
 # ── Routers ──
 app.include_router(auth_router)
+app.include_router(social_router)
 app.include_router(video_router)
 
 if __name__ == "__main__":

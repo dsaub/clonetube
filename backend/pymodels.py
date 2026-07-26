@@ -99,6 +99,39 @@ class StreamUrlResponse(BaseModel):
     key: str
 
 
+# ─── Feed ─────────────────────────────────────────────────────────
+
+class FeedVideoItem(VideoCatalogItem):
+    created_at: str
+    likes: int
+    score: float
+    from_followed_author: bool
+
+
+class FeedResponse(BaseModel):
+    videos: list[FeedVideoItem]
+    following_count: int
+    personalized: bool
+
+
+# ─── Seguidores ───────────────────────────────────────────────────
+
+class PublicUser(BaseModel):
+    id: uuid.UUID
+    username: str
+    full_name: str
+
+
+class FollowStateResponse(BaseModel):
+    username: str
+    following: bool
+    followers: int
+
+
+class FollowingListResponse(BaseModel):
+    users: list[PublicUser]
+
+
 # ─── Auth ─────────────────────────────────────────────────────────
 
 class TokenResponse(BaseModel):

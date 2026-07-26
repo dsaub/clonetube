@@ -2,18 +2,22 @@
 import { computed, onMounted, ref } from 'vue'
 import Header from '@/components/Header.vue'
 import UploadModal from '@/components/UploadModal.vue'
-import { listVideosWithMetadata, type VideoCatalogItem } from '@/api/video'
+import { loadHomeVideos, type FeedVideo } from '@/api/feed'
 import { useUserStore } from '@/stores/user'
 
 const user = useUserStore()
-const videos = ref<VideoCatalogItem[]>([])
+const videos = ref<FeedVideo[]>([])
 const loading = ref(true)
 const error = ref('')
 const uploadOpen = ref(false)
 const uploadNotice = ref('')
 const searchQuery = ref('')
+const onlyFollowing = ref(false)
 
 const canUpload = computed(() => user.logged_in)
+const followedCount = computed(
+  () => videos.value.filter((video) => video.fromFollowedAuthor).length,
+)
 const normalizedSearch = computed(() => normalizeSearch(searchQuery.value))
 const filteredVideos = computed(() => {
   if (!normalizedSearch.value) return videos.value
@@ -49,12 +53,20 @@ async function loadVideos() {
   error.value = ''
 
   try {
-    videos.value = await listVideosWithMetadata()
+    videos.value = await loadHomeVideos(user.token?.access_token, {
+      onlyFollowing: onlyFollowing.value,
+    })
   } catch (cause: unknown) {
     error.value = cause instanceof Error ? cause.message : 'No se han podido cargar los videos.'
   } finally {
     loading.value = false
   }
+}
+
+function selectFeed(followingOnly: boolean) {
+  if (onlyFollowing.value === followingOnly) return
+  onlyFollowing.value = followingOnly
+  void loadVideos()
 }
 
 function openUpload() {
@@ -128,6 +140,29 @@ onMounted(loadVideos)
       </section>
 
       <section class="library" aria-labelledby="library-title">
+        <div v-if="user.logged_in" class="feed-tabs" role="tablist" aria-label="Tipo de feed">
+          <button
+            type="button"
+            role="tab"
+            class="feed-tab"
+            :class="{ active: !onlyFollowing }"
+            :aria-selected="!onlyFollowing"
+            @click="selectFeed(false)"
+          >
+            Para ti
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="feed-tab"
+            :class="{ active: onlyFollowing }"
+            :aria-selected="onlyFollowing"
+            @click="selectFeed(true)"
+          >
+            Siguiendo
+          </button>
+        </div>
+
         <div class="section-heading">
           <div>
             <span class="section-kicker">
@@ -136,6 +171,9 @@ onMounted(loadVideos)
             <h2 id="library-title">
               {{ normalizedSearch ? 'Videos encontrados' : 'Videos disponibles' }}
             </h2>
+            <p v-if="!normalizedSearch && followedCount > 0" class="feed-hint">
+              {{ followedCount }} de tus canales seguidos encabezan tu feed.
+            </p>
             <p v-if="resultSummary" id="search-summary" class="result-summary" aria-live="polite">
               {{ resultSummary }}
             </p>
@@ -158,6 +196,13 @@ onMounted(loadVideos)
           <h3>No llega la señal</h3>
           <p>{{ error }}</p>
           <button type="button" @click="loadVideos">Reintentar</button>
+        </div>
+
+        <div v-else-if="videos.length === 0 && onlyFollowing" class="empty-state following-empty">
+          <span aria-hidden="true">☆</span>
+          <h3>Todavía no sigues a nadie</h3>
+          <p>Sigue a un canal desde la página de un video y sus emisiones aparecerán aquí.</p>
+          <button type="button" @click="selectFeed(false)">Ver todos los videos</button>
         </div>
 
         <div v-else-if="videos.length === 0" class="empty-state">
@@ -185,6 +230,7 @@ onMounted(loadVideos)
             <div class="video-cover">
               <span class="video-noise"></span>
               <span class="card-play">▶</span>
+              <span v-if="video.fromFollowedAuthor" class="following-pill">SIGUIENDO</span>
               <span class="size-pill">{{ formatSize(video.size) }}</span>
             </div>
             <div class="video-info">
@@ -377,10 +423,38 @@ onMounted(loadVideos)
   letter-spacing: -0.035em;
 }
 
-.result-summary {
+.result-summary,
+.feed-hint {
   margin-top: 0.38rem;
   color: #858294;
   font-size: 0.82rem;
+}
+
+.feed-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+}
+
+.feed-tab {
+  padding: 0.45rem 0.95rem;
+  border: 1px solid #38364e;
+  border-radius: 999px;
+  background: #181824;
+  color: #b3b1c0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.feed-tab:hover { border-color: #4b4772; }
+
+.feed-tab.active {
+  border-color: #7c75ff;
+  background: #24223d;
+  color: #dcd9ff;
 }
 
 .refresh-button {
@@ -450,6 +524,20 @@ onMounted(loadVideos)
 }
 
 .video-card:hover .card-play { transform: scale(1.1); }
+
+.following-pill {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #7c75ff;
+  border-radius: 0.3rem;
+  background: rgba(108, 99, 255, 0.85);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
 
 .size-pill {
   position: absolute;
