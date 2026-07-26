@@ -681,7 +681,7 @@ def stream_video(
     range_header: str | None = Header(default=None, alias="Range"),
 ):
     """Reenvía el vídeo desde el almacenamiento respetando la cabecera `Range`."""
-    _find_accessible_video(session, key, current_user)
+    video = _find_accessible_video(session, key, current_user)
 
     params: dict[str, str] = {"Bucket": _BUCKET, "Key": key}
     if range_header:
@@ -690,7 +690,9 @@ def stream_video(
     try:
         obj = s3_client.get_object(**params)
     except Exception as e:
-        logger.warning("No se pudo leer %s del almacenamiento: %s", key, e)
+        # Se registra el id del vídeo y no la key recibida: al venir de la
+        # query string podría llevar saltos de línea y ensuciar el log.
+        logger.warning("No se pudo leer el vídeo %s del almacenamiento: %s", video.id, e)
         raise HTTPException(status_code=404, detail="Vídeo no encontrado")
 
     headers = {"Accept-Ranges": "bytes"}
