@@ -74,6 +74,22 @@ function withBearer(token?: string): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+// S3/MinIO responde los errores como XML; extraer el <Code> evita tener que
+// abrir la consola para saber si el 404 es NoSuchUpload, NoSuchBucket, etc.
+async function s3ErrorDetail(response: Response): Promise<string> {
+  let code = ''
+  try {
+    code = (await response.text()).match(/<Code>([^<]+)<\/Code>/)?.[1] ?? ''
+  } catch {
+    return ''
+  }
+  if (!code) return ''
+  if (code === 'NoSuchUpload' || code === 'NoSuchBucket') {
+    return ` ${code}: la URL prefirmada apunta a otro almacenamiento (revisa S3_PUBLIC_ENDPOINT_URL)`
+  }
+  return ` ${code}`
+}
+
 function errorMessage(response: Response, context: string): Error {
   const status = response.status ? ` (${response.status})` : ''
   return new Error(`${context}${status}`)
@@ -285,7 +301,9 @@ export async function uploadChunk(
 ): Promise<MultipartPart> {
   const response = await fetch(presignedUrl, { method: 'PUT', body: chunk })
   if (!response.ok) {
-    throw errorMessage(response, `Error al subir el fragmento ${chunkNumber}`)
+    throw new Error(
+      `Error al subir el fragmento ${chunkNumber} (${response.status}${await s3ErrorDetail(response)})`,
+    )
   }
 
   const etag = response.headers.get('ETag')
