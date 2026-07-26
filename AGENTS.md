@@ -131,6 +131,8 @@ API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor
 | `POST` | `/api/v1/users/{username}/follow` | Seguir a un usuario (idempotente). |
 | `DELETE` | `/api/v1/users/{username}/follow` | Dejar de seguir a un usuario (idempotente). |
 | `GET` | `/api/v1/users/me/following` | Usuarios seguidos por el usuario autenticado. |
+| `GET` | `/api/v1/users/{username}/channel` | Ficha del canal: nombre, seguidores, seguidos, nº de vídeos y estado de seguimiento. |
+| `GET` | `/api/v1/users/{username}/videos` | Vídeos del canal paginados (`page`, `page_size`; 20 por defecto, máximo 50). |
 
 ### Algoritmo del feed (`feed.py`)
 
@@ -145,6 +147,16 @@ Modulo puro, sin acceso a BD ni a S3, para poder probarlo aislado:
   Los empates se resuelven por `video_id` para que el orden sea determinista.
 
 Las consultas de la relacion de seguimiento viven en `follows.py`.
+
+### Canal (`channels.py`)
+
+Consultas de la pagina de canal, separadas de la ruta para poder probarlas:
+
+- `count_videos` / `page_of_videos`: solo el propietario ve sus videos ocultos y
+  privados; el resto de visitantes ve unicamente los publicos.
+- Orden por `created_at` descendente con desempate por `id`, para que un mismo
+  video no pueda aparecer en dos paginas.
+- `DEFAULT_PAGE_SIZE = 20` y `MAX_PAGE_SIZE = 50`.
 
 ### Analisis tecnico
 
@@ -269,10 +281,20 @@ Componente modal completo que implementa el flujo multipart upload cliente:
 - No usa librerias externas de UI — todos los estilos son CSS scoped manual.
 - Tema oscuro consistente en toda la app.
 
+### Pagina de canal
+
+- Ruta `/channel/@usuario` (`ChannelView.vue`). Si la URL llega sin arroba se
+  reescribe a la forma canonica antes de pedir datos.
+- Cabecera del canal con avatar, nombre, `@usuario`, numero de videos y el boton
+  de suscripcion (`FollowButton.vue`).
+- Rejilla de videos paginada de 20 en 20. La pagina viaja en la query (`?page=2`)
+  para que el enlace se pueda compartir y el navegador conserve el historial.
+- `api/channel.ts` habla con `/api/v1/users/{username}/channel` y `/videos`.
+
 ### Tareas pendientes
 
 - [ ] Crear layout principal con header, sidebar y `<RouterView />`.
-- [ ] Crear vistas: `HomeView`, `WatchView`, `ChannelView`, `SearchView`.
+- [ ] Crear vistas: `HomeView`, `SearchView`.
 - [ ] Definir rutas adicionales con lazy loading.
 - [ ] Crear stores reales: `useAuthStore`, `useVideoStore`.
 - [ ] Agregar componentes UI: `VideoCard`, `CommentSection`, `VideoPlayer`, `Sidebar`.

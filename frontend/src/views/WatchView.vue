@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { getAccessibleVideoMetadataByKey, getStreamUrl, type VideoMetadata } from '@/api/video'
 import VideoPlayer from '@/components/VideoPlayer.vue'
 import FollowButton from '@/components/FollowButton.vue'
+import { channelPath } from '@/api/channel'
 
 const route = useRoute()
 
@@ -88,13 +89,19 @@ onMounted(() => {
               <h2 id="watch-video-title">{{ title }}</h2>
             </div>
             <div v-if="metadata?.author" class="author-chip">
-              <span class="author-avatar" aria-hidden="true">
-                {{ metadata.author.displayName.charAt(0).toUpperCase() }}
-              </span>
-              <span>
-                <strong>{{ metadata.author.displayName }}</strong>
-                <small>@{{ metadata.author.username }}</small>
-              </span>
+              <RouterLink
+                class="author-link"
+                :to="channelPath(metadata.author.username)"
+                :aria-label="`Ver el canal de ${metadata.author.displayName}`"
+              >
+                <span class="author-avatar" aria-hidden="true">
+                  {{ metadata.author.displayName.charAt(0).toUpperCase() }}
+                </span>
+                <span>
+                  <strong>{{ metadata.author.displayName }}</strong>
+                  <small>@{{ metadata.author.username }}</small>
+                </span>
+              </RouterLink>
               <FollowButton :username="metadata.author.username" />
             </div>
           </div>
@@ -197,6 +204,15 @@ onMounted(() => {
   color: #bdb9ff;
   font-weight: 800;
 }
+
+.author-link {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: inherit;
+}
+
+.author-link:hover strong { color: #bdb9ff; }
 
 .author-chip strong,
 .author-chip small {

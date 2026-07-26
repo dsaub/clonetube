@@ -137,6 +137,36 @@ class FollowingListResponse(BaseModel):
     users: list[PublicUser]
 
 
+# ─── Canal ────────────────────────────────────────────────────────
+
+class ChannelResponse(BaseModel):
+    id: uuid.UUID
+    username: str
+    full_name: str
+    following: bool
+    followers: int
+    following_count: int
+    video_count: int
+
+
+class ChannelVideoItem(BaseModel):
+    id: uuid.UUID
+    key: str
+    title: str
+    description: str
+    visibility: VideoVisibility
+    created_at: str
+    likes: int
+
+
+class ChannelVideosResponse(BaseModel):
+    videos: list[ChannelVideoItem]
+    page: int
+    page_size: int
+    total: int
+    pages: int
+
+
 # ─── Auth ─────────────────────────────────────────────────────────
 
 class TokenResponse(BaseModel):

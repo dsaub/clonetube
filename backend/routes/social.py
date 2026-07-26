@@ -1,15 +1,24 @@
-"""Endpoints de la red social: seguir y dejar de seguir usuarios."""
+"""Endpoints de la red social: canales, seguir y dejar de seguir usuarios."""
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
 
+import channels
 import follows
 from auth.dependencies import get_current_user, get_optional_user
 from database import get_session
+from feed import ensure_utc
 from models import User
-from pymodels import FollowingListResponse, FollowStateResponse, PublicUser
+from pymodels import (
+    ChannelResponse,
+    ChannelVideoItem,
+    ChannelVideosResponse,
+    FollowingListResponse,
+    FollowStateResponse,
+    PublicUser,
+)
 
 router = APIRouter(prefix="/api/v1/users", tags=["Seguidores"])
 
@@ -45,6 +54,82 @@ def list_following(
         PublicUser(id=user.id, username=user.username, full_name=user.full_name)
         for user in follows.followed_users(session, current_user.id)
     ])
+
+
+@router.get(
+    "/{username}/channel",
+    response_model=ChannelResponse,
+    summary="Datos del canal",
+    description=(
+        "Devuelve la ficha pública del canal `username`: nombre, seguidores, "
+        "canales seguidos, número de vídeos y si el visitante ya lo sigue."
+    ),
+    responses={404: {"description": USER_NOT_FOUND}},
+)
+def channel_profile(
+    username: str,
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User | None, Depends(get_optional_user)],
+) -> ChannelResponse:
+    channel = _find_user(session, username)
+    return ChannelResponse(
+        id=channel.id,
+        username=channel.username,
+        full_name=channel.full_name,
+        following=current_user is not None
+        and follows.is_following(session, current_user.id, channel.id),
+        followers=follows.count_followers(session, channel.id),
+        following_count=follows.count_following(session, channel.id),
+        video_count=channels.count_videos(session, channel.id, current_user),
+    )
+
+
+@router.get(
+    "/{username}/videos",
+    response_model=ChannelVideosResponse,
+    summary="Vídeos del canal",
+    description=(
+        "Vídeos del canal `username` paginados de "
+        f"{channels.DEFAULT_PAGE_SIZE} en {channels.DEFAULT_PAGE_SIZE}, del más "
+        "reciente al más antiguo. Solo el propietario ve sus vídeos ocultos y "
+        "privados; el resto de visitantes ve únicamente los públicos."
+    ),
+    responses={404: {"description": USER_NOT_FOUND}},
+)
+def channel_videos(
+    username: str,
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User | None, Depends(get_optional_user)],
+    page: Annotated[int, Query(ge=1, description="Página solicitada (empieza en 1).")] = 1,
+    page_size: Annotated[int, Query(
+        ge=1,
+        le=channels.MAX_PAGE_SIZE,
+        description="Vídeos por página.",
+    )] = channels.DEFAULT_PAGE_SIZE,
+) -> ChannelVideosResponse:
+    channel = _find_user(session, username)
+    total = channels.count_videos(session, channel.id, current_user)
+    videos = channels.page_of_videos(session, channel.id, current_user, page, page_size)
+    likes = channels.likes_by_video(session, [video.id for video in videos])
+
+    return ChannelVideosResponse(
+        videos=[
+            ChannelVideoItem(
+                id=video.id,
+                key=video.filename,
+                title=video.video_name,
+                description=video.video_desc,
+                visibility=video.visibility,
+                created_at=ensure_utc(video.created_at).isoformat(),
+                likes=likes.get(video.id, 0),
+            )
+            for video in videos
+        ],
+        page=page,
+        page_size=page_size,
+        total=total,
+        pages=channels.total_pages(total, page_size),
+    )
 
 
 @router.get(
