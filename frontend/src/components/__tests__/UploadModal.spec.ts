@@ -110,15 +110,11 @@ describe('UploadModal.vue', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ url: 'https://presigned.example.com/chunk1' }),
+        json: () => Promise.resolve({ PartNumber: 1, ETag: etag }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        headers: new Headers({ ETag: etag }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ location: 'https://s3.example.com/video.mp4', key: videoKey }),
+        json: () => Promise.resolve({ location: null, key: videoKey }),
       })
 
     const wrapper = mountModal()
@@ -132,6 +128,12 @@ describe('UploadModal.vue', () => {
 
     expect(wrapper.find('.result.success').exists()).toBe(true)
     expect(wrapper.text()).toContain('¡Video subido con éxito!')
+
+    // El fragmento va a la API, no a un almacenamiento externo: sin esto el
+    // navegador vuelve a intentar alcanzar el bucket y falla con un 404.
+    const [chunkUrl, chunkInit] = mockFetch.mock.calls[1] ?? []
+    expect(chunkUrl).toContain('/api/v1/video/upload-chunk')
+    expect(chunkInit?.method).toBe('PUT')
   })
 
   it('saves the selected title and description after completing the upload', async () => {
@@ -146,11 +148,7 @@ describe('UploadModal.vue', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ url: 'https://presigned.example.com/chunk1' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers({ ETag: '"abc123"' }),
+        json: () => Promise.resolve({ PartNumber: 1, ETag: '"abc123"' }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -192,7 +190,7 @@ describe('UploadModal.vue', () => {
 
     expect(wrapper.find('.result.success').exists()).toBe(true)
     expect(wrapper.find('.metadata-warning').exists()).toBe(false)
-    const [updateUrl, updateInit] = mockFetch.mock.calls[5] ?? []
+    const [updateUrl, updateInit] = mockFetch.mock.calls[4] ?? []
     expect(updateUrl).toBe('/api/v1/video/08cb6579-48f8-44c8-845c-e783d86f7584')
     expect(updateInit?.method).toBe('PATCH')
     expect(JSON.parse(updateInit?.body as string)).toEqual({

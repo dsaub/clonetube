@@ -51,10 +51,10 @@ onMounted(() => {
 
     <section class="hero">
       <div class="hero-content">
-        <h2>Multipart Upload a S3</h2>
+        <h2>Subida de videos a Clonetube</h2>
         <p>
-          Prueba el flujo completo de subida de videos con <strong>multipart upload</strong>
-          usando presigned URLs de S3.
+          Prueba el flujo completo de subida de videos: el archivo se envía
+          <strong>por fragmentos</strong> y Clonetube los ensambla al terminar.
         </p>
         <button class="btn-upload" @click="openModal">
           <span class="btn-icon">📤</span>
@@ -70,12 +70,12 @@ onMounted(() => {
           <div class="flow-arrow">→</div>
           <div class="flow-step">
             <span class="step-num">2</span>
-            <span>Fragmentar &amp; firmar</span>
+            <span>Fragmentar</span>
           </div>
           <div class="flow-arrow">→</div>
           <div class="flow-step">
             <span class="step-num">3</span>
-            <span>Subir a S3</span>
+            <span>Subir a Clonetube</span>
           </div>
           <div class="flow-arrow">→</div>
           <div class="flow-step">
@@ -93,14 +93,14 @@ onMounted(() => {
           <code class="method post">POST</code>
           <div class="endpoint-info">
             <code class="path">/api/v1/video/start-multipart</code>
-            <span class="desc">Inicia el multipart upload y devuelve un UUID como key</span>
+            <span class="desc">Reserva la subida y devuelve un identificador único</span>
           </div>
         </div>
         <div class="endpoint-card">
-          <code class="method get">GET</code>
+          <code class="method put">PUT</code>
           <div class="endpoint-info">
-            <code class="path">/api/v1/video/sign-chunk</code>
-            <span class="desc">Genera una presigned URL para cada fragmento</span>
+            <code class="path">/api/v1/video/upload-chunk</code>
+            <span class="desc">Recibe cada fragmento y lo guarda en Clonetube</span>
           </div>
         </div>
         <div class="endpoint-card">
@@ -117,8 +117,7 @@ onMounted(() => {
       <h3>⚠️ Requisitos</h3>
       <ul>
         <li>El backend debe estar corriendo en <code>http://localhost:8000</code></li>
-        <li>Credenciales AWS configuradas en variables de entorno</li>
-        <li>Bucket S3 con permisos de multipart upload</li>
+        <li>El almacenamiento de Clonetube configurado en variables de entorno</li>
       </ul>
     </section>
 
@@ -334,6 +333,7 @@ onMounted(() => {
 
 .method.post { background: rgba(73, 204, 144, 0.15); color: #49cc90; }
 .method.get  { background: rgba(97, 175, 254, 0.15); color: #61affe; }
+.method.put  { background: rgba(252, 161, 48, 0.15); color: #fca130; }
 
 .endpoint-info {
   display: flex;

@@ -4,10 +4,17 @@ import os
 import tempfile
 import uuid
 from datetime import UTC, datetime
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException
+from urllib.parse import urlencode
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session, func, select
 import follows
-from auth.dependencies import get_current_user, get_optional_user
+from auth.dependencies import (
+    get_current_user,
+    get_optional_user,
+    get_optional_user_allowing_query_token,
+    optional_oauth2_scheme,
+)
 from database import get_session
 from feed import FeedCandidate, ScoredVideo, ensure_utc, rank_candidates
 from models import MultipartUpload, User, UserLikesVideo, Video
@@ -17,6 +24,7 @@ from pymodels import (
     CompleteMultipartBody,
     StartMultipartResponse,
     SignChunkResponse,
+    UploadChunkResponse,
     CompleteMultipartResponse,
     FeedResponse,
     FeedVideoItem,
@@ -41,10 +49,30 @@ logger = logging.getLogger("routes.video")
 
 router = APIRouter(prefix="/api/v1/video", tags=["S3 Multipart Upload"])
 
+# Los fragmentos se leen en memoria antes de reenviarlos a S3, así que se acota
+# el tamaño aceptado. El frontend trocea de 5 MB; el mínimo de una parte
+# intermedia en S3 también son 5 MB, de ahí el margen.
+MAX_CHUNK_BYTES = 32 * 1024 * 1024
+_STREAM_CHUNK_BYTES = 1024 * 1024
+
+
 def _generate_video_key(original_filename: str) -> str:
     """Genera una clave única para S3 a partir del nombre original."""
     video_id = uuid.uuid4().hex
     return f"videos/{video_id}.mp4"
+
+
+def _find_pending_upload(
+    session: Session, key: str, upload_id: str, user: User
+) -> MultipartUpload:
+    """Devuelve la carga en curso del usuario, o 404 si no existe o ya se cerró."""
+    upload = session.exec(select(MultipartUpload).where(
+        MultipartUpload.key == key,
+        MultipartUpload.upload_id == upload_id,
+    )).first()
+    if upload is None or upload.owner_id != user.id or upload.status != "pending":
+        raise HTTPException(status_code=404, detail=constants.LOAD_NOT_FOUND)
+    return upload
 
 
 @router.post(
@@ -146,12 +174,7 @@ async def sign_chunk(
     - **upload_id**: ID del multipart upload.
     - **chunk_number**: número de parte (1‑based).
     """
-    upload = session.exec(select(MultipartUpload).where(
-        MultipartUpload.key == filename,
-        MultipartUpload.upload_id == upload_id,
-    )).first()
-    if upload is None or upload.owner_id != current_user.id or upload.status != "pending":
-        raise HTTPException(status_code=404, detail=constants.LOAD_NOT_FOUND)
+    _find_pending_upload(session, filename, upload_id, current_user)
     try:
         presigned_url = s3_client_public.generate_presigned_url(
             ClientMethod="upload_part",
@@ -167,6 +190,70 @@ async def sign_chunk(
         return SignChunkResponse(url=presigned_url)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put(
+    "/upload-chunk",
+    summary="Subir fragmento",
+    description=(
+        "Recibe el contenido de un fragmento y lo reenvía al almacenamiento. "
+        "A diferencia de `/sign-chunk`, no expone el almacenamiento al navegador: "
+        "el fragmento viaja por la API, así que funciona aunque el bucket sólo sea "
+        "accesible desde la red interna.\n\n"
+        "Devuelve el `ETag` que hay que enviar después en `/complete-multipart`."
+    ),
+    response_model=UploadChunkResponse,
+    responses={
+        413: {"description": "El fragmento supera el tamaño máximo permitido"},
+        500: {"description": "Error al subir el fragmento al almacenamiento"},
+        404: {"description": constants.LOAD_NOT_FOUND},
+    },
+)
+async def upload_chunk(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
+    filename: str = Query(
+        ...,
+        description="Key del objeto devuelta por `/start-multipart`.",
+        examples=["videos/a1b2c3d4e5f6....mp4"],
+    ),
+    upload_id: str = Query(
+        ...,
+        description="ID del multipart upload obtenido en `/start-multipart`.",
+        examples=["example-upload-id-12345"],
+    ),
+    chunk_number: int = Query(
+        ...,
+        description="Número del fragmento a subir (empezando en 1).",
+        ge=1,
+        examples=[1],
+    ),
+):
+    """Sube un fragmento al almacenamiento en nombre del navegador."""
+    _find_pending_upload(session, filename, upload_id, current_user)
+
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="El fragmento está vacío")
+    if len(body) > MAX_CHUNK_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"El fragmento supera el máximo de {MAX_CHUNK_BYTES} bytes",
+        )
+
+    try:
+        response = s3_client.upload_part(
+            Bucket=_BUCKET,
+            Key=filename,
+            UploadId=upload_id,
+            PartNumber=chunk_number,
+            Body=body,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return UploadChunkResponse(PartNumber=chunk_number, ETag=response["ETag"])
 
 
 @router.post(
@@ -196,12 +283,7 @@ async def complete_multipart(
     - **uploadId**: ID del multipart upload.
     - **parts**: lista de fragmentos subidos con su `PartNumber` y `ETag`.
     """
-    upload = session.exec(select(MultipartUpload).where(
-        MultipartUpload.key == body.filename,
-        MultipartUpload.upload_id == body.uploadId,
-    )).first()
-    if upload is None or upload.owner_id != current_user.id or upload.status != "pending":
-        raise HTTPException(status_code=404, detail=constants.LOAD_NOT_FOUND)
+    upload = _find_pending_upload(session, body.filename, body.uploadId, current_user)
     try:
         parts_list = [part.model_dump() for part in body.parts]
 
@@ -247,12 +329,7 @@ async def cancel_multipart(
     filename: str,
     upload_id: str
 ) -> dict[str, str]:
-    upload = session.exec(select(MultipartUpload).where(
-        MultipartUpload.key == filename,
-        MultipartUpload.upload_id == upload_id,
-    )).first()
-    if upload is None or upload.owner_id != current_user.id or upload.status != "pending":
-        raise HTTPException(status_code=404, detail=constants.LOAD_NOT_FOUND)
+    upload = _find_pending_upload(session, filename, upload_id, current_user)
     s3_client.abort_multipart_upload(
         Bucket=_BUCKET, Key=filename, UploadId=upload_id,
     )
@@ -547,33 +624,87 @@ async def delete_video(
 
 @router.get(
     "/stream-url",
-    summary="Obtener URL de streaming",
-    description="Genera una URL prefirmada para reproducir el video directamente desde S3.",
+    summary="Obtener URL de reproducción",
+    description=(
+        "Devuelve la URL con la que el reproductor puede pedir el vídeo. Apunta a "
+        "`/api/v1/video/stream`, de modo que el almacenamiento no necesita ser "
+        "accesible desde el navegador.\n\n"
+        "Para vídeos que no son públicos la URL incluye el JWT en la query string, "
+        "porque el elemento `<video>` no puede enviar cabeceras."
+    ),
     response_model=StreamUrlResponse,
-    responses={
-        500: {"description": "Error al generar la URL de streaming"},
-    },
 )
 async def stream_url(
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[User | None, Depends(get_optional_user)],
+    token: Annotated[str | None, Depends(optional_oauth2_scheme)],
     key: str = Query(
         ...,
-        description="Key del video en S3 (ej: videos/abc123.mp4).",
+        description="Key del video (ej: videos/abc123.mp4).",
         examples=["videos/a1b2c3d4e5f6....mp4"],
     ),
 ):
-    """Devuelve una URL prefirmada válida por 24h para streaming del video."""
+    """Devuelve la URL de reproducción del vídeo servida por la propia API."""
+    video = _find_accessible_video(session, key, current_user)
+
+    params = {"key": key}
+    # Un vídeo público no necesita credenciales: mantener el token fuera de la
+    # URL evita que acabe en historiales, logs de proxy o enlaces compartidos.
+    if video.visibility != "public" and token:
+        params["token"] = token
+
+    return StreamUrlResponse(url=f"/api/v1/video/stream?{urlencode(params)}", key=key)
+
+
+@router.get(
+    "/stream",
+    summary="Reproducir un vídeo",
+    description=(
+        "Devuelve el contenido del vídeo, con soporte de peticiones parciales "
+        "(`Range`) para que el reproductor pueda buscar dentro del vídeo."
+    ),
+    response_class=StreamingResponse,
+    responses={
+        200: {"content": {"video/mp4": {}}, "description": "Contenido del vídeo"},
+        206: {"content": {"video/mp4": {}}, "description": "Fragmento solicitado"},
+        404: {"description": "Vídeo no encontrado"},
+    },
+)
+def stream_video(
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User | None, Depends(get_optional_user_allowing_query_token)],
+    key: str = Query(
+        ...,
+        description="Key del video (ej: videos/abc123.mp4).",
+        examples=["videos/a1b2c3d4e5f6....mp4"],
+    ),
+    range_header: str | None = Header(default=None, alias="Range"),
+):
+    """Reenvía el vídeo desde el almacenamiento respetando la cabecera `Range`."""
     _find_accessible_video(session, key, current_user)
+
+    params: dict[str, str] = {"Bucket": _BUCKET, "Key": key}
+    if range_header:
+        params["Range"] = range_header
+
     try:
-        url = s3_client_public.generate_presigned_url(
-            ClientMethod="get_object",
-            Params={
-                "Bucket": _BUCKET,
-                "Key": key,
-            },
-            ExpiresIn=86400,
-        )
-        return StreamUrlResponse(url=url, key=key)
+        obj = s3_client.get_object(**params)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning("No se pudo leer %s del almacenamiento: %s", key, e)
+        raise HTTPException(status_code=404, detail="Vídeo no encontrado")
+
+    headers = {"Accept-Ranges": "bytes"}
+    if obj.get("ContentLength") is not None:
+        headers["Content-Length"] = str(obj["ContentLength"])
+    status_code = 200
+    if obj.get("ContentRange"):
+        headers["Content-Range"] = obj["ContentRange"]
+        status_code = 206
+
+    body = obj["Body"]
+    return StreamingResponse(
+        body.iter_chunks(chunk_size=_STREAM_CHUNK_BYTES),
+        status_code=status_code,
+        media_type=obj.get("ContentType") or "video/mp4",
+        headers=headers,
+    )

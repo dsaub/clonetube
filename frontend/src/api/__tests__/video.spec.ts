@@ -4,7 +4,6 @@ import {
   getStreamUrl,
   listVideos,
   listVideosWithMetadata,
-  signChunk,
   startMultipart,
   updateVideoMetadataByKey,
   uploadChunk,
@@ -184,32 +183,28 @@ describe('multipart upload', () => {
     )
   })
 
-  it('signs and uploads a chunk preserving the returned ETag', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ url: 'https://storage.example/chunk' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers({ ETag: '"etag-1"' }),
-      })
+  it('sends the chunk to the API instead of an external storage URL', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ PartNumber: 1, ETag: '"etag-1"' }),
+    })
 
-    const url = await signChunk('videos/video-1.mp4', 'upload-1', 1, 'token-123')
     const chunk = new Blob(['video data'])
-    const part = await uploadChunk(url, chunk, 1)
+    const part = await uploadChunk('videos/video-1.mp4', 'upload-1', 1, chunk, 'token-123')
 
-    expect(mockFetch).toHaveBeenNthCalledWith(
-      1,
-      '/api/v1/video/sign-chunk?filename=videos%2Fvideo-1.mp4&upload_id=upload-1&chunk_number=1',
-      { headers: { Authorization: 'Bearer token-123' } },
-    )
-    expect(mockFetch).toHaveBeenNthCalledWith(
-      2,
-      'https://storage.example/chunk',
-      { method: 'PUT', body: chunk },
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/video/upload-chunk?filename=videos%2Fvideo-1.mp4&upload_id=upload-1&chunk_number=1',
+      { method: 'PUT', headers: { Authorization: 'Bearer token-123' }, body: chunk },
     )
     expect(part).toEqual({ PartNumber: 1, ETag: '"etag-1"' })
+  })
+
+  it('reports a failed chunk with its status code', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 })
+
+    await expect(
+      uploadChunk('videos/video-1.mp4', 'upload-1', 2, new Blob(['x']), 'token-123'),
+    ).rejects.toThrow('Error al subir el fragmento 2 (404)')
   })
 
   it('completes the multipart upload with the OpenAPI body shape', async () => {

@@ -54,10 +54,6 @@ export interface StartMultipartResponse {
   original_filename: string
 }
 
-export interface SignChunkResponse {
-  url: string
-}
-
 export interface MultipartPart {
   PartNumber: number
   ETag: string
@@ -72,22 +68,6 @@ export interface CompleteMultipartResponse {
 
 function withBearer(token?: string): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-// S3/MinIO responde los errores como XML; extraer el <Code> evita tener que
-// abrir la consola para saber si el 404 es NoSuchUpload, NoSuchBucket, etc.
-async function s3ErrorDetail(response: Response): Promise<string> {
-  let code = ''
-  try {
-    code = (await response.text()).match(/<Code>([^<]+)<\/Code>/)?.[1] ?? ''
-  } catch {
-    return ''
-  }
-  if (!code) return ''
-  if (code === 'NoSuchUpload' || code === 'NoSuchBucket') {
-    return ` ${code}: la URL prefirmada apunta a otro almacenamiento (revisa S3_PUBLIC_ENDPOINT_URL)`
-  }
-  return ` ${code}`
 }
 
 function errorMessage(response: Response, context: string): Error {
@@ -271,49 +251,32 @@ export async function startMultipart(
   return response.json() as Promise<StartMultipartResponse>
 }
 
-export async function signChunk(
+// El fragmento se envía a la API de Clonetube, que lo reenvía al almacenamiento.
+// Así la subida no depende de que el almacenamiento sea accesible desde el
+// navegador, que era el origen del 404 al subir un vídeo.
+export async function uploadChunk(
   filename: string,
   uploadId: string,
   chunkNumber: number,
+  chunk: Blob,
   token?: string,
-): Promise<string> {
+): Promise<MultipartPart> {
   const params = new URLSearchParams({
     filename,
     upload_id: uploadId,
     chunk_number: String(chunkNumber),
   })
-  const response = await fetch(`${API}/sign-chunk?${params}`, {
+  const response = await fetch(`${API}/upload-chunk?${params}`, {
+    method: 'PUT',
     headers: withBearer(token),
+    body: chunk,
   })
 
   if (!response.ok) {
-    throw errorMessage(response, `Error al firmar el fragmento ${chunkNumber}`)
+    throw errorMessage(response, `Error al subir el fragmento ${chunkNumber}`)
   }
 
-  const data: SignChunkResponse = await response.json()
-  return data.url
-}
-
-export async function uploadChunk(
-  presignedUrl: string,
-  chunk: Blob,
-  chunkNumber: number,
-): Promise<MultipartPart> {
-  const response = await fetch(presignedUrl, { method: 'PUT', body: chunk })
-  if (!response.ok) {
-    throw new Error(
-      `Error al subir el fragmento ${chunkNumber} (${response.status}${await s3ErrorDetail(response)})`,
-    )
-  }
-
-  const etag = response.headers.get('ETag')
-  if (!etag) {
-    throw new Error(
-      'S3 no devolvió el ETag. Comprueba que ETag esté incluido en Access-Control-Expose-Headers.',
-    )
-  }
-
-  return { PartNumber: chunkNumber, ETag: etag }
+  return response.json() as Promise<MultipartPart>
 }
 
 export async function completeMultipart(
