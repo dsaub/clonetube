@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import Header from '@/components/Header.vue'
+import UploadModal from '@/components/UploadModal.vue'
 import {
   deleteStudioVideo,
   listStudioVideos,
@@ -20,6 +21,7 @@ const loading = ref(false)
 const error = ref('')
 const notice = ref('')
 const busyId = ref('')
+const uploadOpen = ref(false)
 
 const visibilityLabels: Record<VideoVisibility, string> = {
   public: 'Público',
@@ -89,6 +91,13 @@ async function copyLink(video: VideoDraft) {
   }
 }
 
+function onUploaded() {
+  uploadOpen.value = false
+  notice.value = 'El vídeo ya está disponible en tu canal.'
+  const token = user.token?.access_token
+  if (token) void loadVideos(token)
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
     .format(new Date(value))
@@ -118,7 +127,14 @@ watch(() => user.token?.access_token, (token) => {
             <span>CLONETUBE STUDIO</span>
             <h1>Contenido del canal</h1>
           </div>
-          <RouterLink to="/" class="upload-link">+ Subir vídeo</RouterLink>
+          <button
+            v-if="user.logged_in"
+            type="button"
+            class="upload-link"
+            @click="uploadOpen = true"
+          >
+            <span aria-hidden="true">↑</span> Subir vídeo
+          </button>
         </div>
 
         <div v-if="!user.logged_in" class="state-card">
@@ -132,6 +148,9 @@ watch(() => user.token?.access_token, (token) => {
         <div v-else-if="videos.length === 0" class="state-card">
           <h2>Aún no has subido vídeos</h2>
           <p>Cuando publiques el primero aparecerá aquí.</p>
+          <button type="button" class="upload-link" @click="uploadOpen = true">
+            <span aria-hidden="true">↑</span> Subir vídeo
+          </button>
         </div>
 
         <template v-else>
@@ -209,6 +228,12 @@ watch(() => user.token?.access_token, (token) => {
         </template>
       </main>
     </div>
+
+    <UploadModal
+      v-if="uploadOpen"
+      @close="uploadOpen = false"
+      @uploaded="onUploaded"
+    />
   </div>
 </template>
 
@@ -225,7 +250,9 @@ watch(() => user.token?.access_token, (token) => {
 .studio-heading span { color: #8882ff; font-size: .68rem; font-weight: 800; letter-spacing: .16em; }
 .studio-heading h1 { margin-top: .35rem; color: #f5f4ff; font-size: clamp(1.7rem, 3vw, 2.4rem); }
 .upload-link, .save-button { border: 1px solid #6c63ff; border-radius: .55rem; background: #6c63ff; color: white; font-weight: 750; }
-.upload-link { padding: .7rem 1rem; }
+.upload-link { display: inline-flex; align-items: center; gap: .45rem; padding: .7rem 1rem; cursor: pointer; font: inherit; font-weight: 750; white-space: nowrap; }
+.upload-link:hover { background: #7a72ff; }
+.state-card .upload-link { margin-top: 1.25rem; }
 .messages { min-height: 2.3rem; }
 .message { margin-bottom: .8rem; padding: .65rem .8rem; border-radius: .5rem; font-size: .85rem; }
 .message.error, .state-card.error { border: 1px solid #6b303c; background: #26171d; color: #ff9da8; }
