@@ -17,6 +17,12 @@ describe('router', () => {
     expect(route.name).toBe('studio')
   })
 
+  it('has channel route with the handle as a parameter', () => {
+    const route = router.resolve('/channel/@ana')
+    expect(route.name).toBe('channel')
+    expect(route.params.handle).toBe('@ana')
+  })
+
   it('uses createWebHistory', () => {
     expect(router.options.history).toBeDefined()
   })

@@ -19,6 +19,12 @@ const router = createRouter({
       component: () => import('@/views/StudioView.vue'),
     },
     {
+      // El nombre viaja con arroba: /channel/@usuario
+      path: '/channel/:handle',
+      name: 'channel',
+      component: () => import('@/views/ChannelView.vue'),
+    },
+    {
       path: '/',
       name: 'index',
       component: () => import('@/views/IndexView.vue'),

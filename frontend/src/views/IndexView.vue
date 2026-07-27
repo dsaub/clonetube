@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import Header from '@/components/Header.vue'
 import { loadHomeVideos, type FeedVideo } from '@/api/feed'
+import { channelPath } from '@/api/channel'
 import { useUserStore } from '@/stores/user'
 
 const user = useUserStore()
@@ -205,27 +206,32 @@ onMounted(loadVideos)
         </div>
 
         <div v-else class="video-grid">
-          <RouterLink
-            v-for="video in filteredVideos"
-            :key="video.key"
-            class="video-card"
-            :to="{ name: 'watch', query: { key: video.key, title: video.title } }"
-            :aria-label="`Reproducir ${video.title}`"
-          >
-            <div class="video-cover">
-              <span class="video-noise"></span>
-              <span class="card-play">▶</span>
-              <span v-if="video.fromFollowedAuthor" class="following-pill">SIGUIENDO</span>
-              <span class="size-pill">{{ formatSize(video.size) }}</span>
-            </div>
-            <div class="video-info">
-              <h3>{{ video.title }}</h3>
-              <p v-if="video.author" class="video-author">
+          <article v-for="video in filteredVideos" :key="video.key" class="video-card">
+            <RouterLink
+              class="video-link"
+              :to="{ name: 'watch', query: { key: video.key, title: video.title } }"
+              :aria-label="`Reproducir ${video.title}`"
+            >
+              <div class="video-cover">
+                <span class="video-noise"></span>
+                <span class="card-play">▶</span>
+                <span v-if="video.fromFollowedAuthor" class="following-pill">SIGUIENDO</span>
+                <span class="size-pill">{{ formatSize(video.size) }}</span>
+              </div>
+              <div class="video-info">
+                <h3>{{ video.title }}</h3>
+                <p>{{ formatDate(video.last_modified) }}</p>
+              </div>
+            </RouterLink>
+            <p v-if="video.author" class="video-author">
+              <RouterLink
+                :to="channelPath(video.author.username)"
+                :aria-label="`Ver el canal de ${video.author.displayName}`"
+              >
                 {{ video.author.displayName }} · @{{ video.author.username }}
-              </p>
-              <p>{{ formatDate(video.last_modified) }}</p>
-            </div>
-          </RouterLink>
+              </RouterLink>
+            </p>
+          </article>
         </div>
       </main>
     </div>
@@ -391,8 +397,12 @@ onMounted(loadVideos)
 }
 
 .video-card {
-  display: block;
   min-width: 0;
+  color: inherit;
+}
+
+.video-link {
+  display: block;
   color: inherit;
 }
 
@@ -477,12 +487,17 @@ onMounted(loadVideos)
   font-size: 0.75rem;
 }
 
-.video-info .video-author {
+.video-author {
   overflow: hidden;
-  color: #aaa7bb;
+  margin-top: 0.32rem;
+  padding: 0 0.15rem;
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.video-author a { color: #aaa7bb; }
+.video-author a:hover { color: #dcd9ff; }
 
 .empty-state {
   display: grid;
