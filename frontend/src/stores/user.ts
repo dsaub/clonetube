@@ -34,19 +34,31 @@ export const useUserStore = defineStore('user', () => {
     async function finishAuthentication(authToken: Token) {
         token.value = authToken;
         localStorage.setItem("token", authToken.access_token);
-        await reload();
-        logged_in.value = true;
+        try {
+            await reload();
+            logged_in.value = true;
+        } catch (error) {
+            logout();
+            throw error;
+        }
     }
 
-    function init() {
-        const tok_string = localStorage.getItem("token");
-        if (tok_string === null) return;
-        logged_in.value = true;
+    async function initialize() {
+        const storedToken = localStorage.getItem("token");
+        if (!storedToken) return;
+
         token.value = {
-            access_token: tok_string,
+            access_token: storedToken,
             token_type: 'bearer'
+        };
+
+        try {
+            await reload();
+            logged_in.value = true;
+        } catch {
+            // A token in localStorage is only a session candidate until the API confirms it.
+            logout();
         }
-        reload();
     }
 
     async function reload() {
@@ -66,7 +78,6 @@ export const useUserStore = defineStore('user', () => {
         localStorage.removeItem("token");
     }
 
-    init();
     return {
         user,
         token,
@@ -74,6 +85,7 @@ export const useUserStore = defineStore('user', () => {
         username,
         login,
         register,
+        initialize,
         reload,
         logout,
     }

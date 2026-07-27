@@ -42,6 +42,15 @@ beforeEach(() => {
 })
 
 describe('IndexView search', () => {
+  it('shows the video feed without an app presentation', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.library').exists()).toBe(true)
+    expect(wrapper.find('.hero').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Comparte lo que merece ser visto')
+  })
+
   it('filters videos by the available filename, ignoring accents and case', async () => {
     const wrapper = mountView()
     await flushPromises()
