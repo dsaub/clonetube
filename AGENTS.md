@@ -33,7 +33,7 @@ clonetube/
 │   │   └── versions/            # Migraciones generadas
 │   ├── alembic.ini
 │   ├── entrypoint.sh            # Ejecuta `alembic upgrade head` + CMD
-│   ├── Dockerfile               # Python slim + ffmpeg + entrypoint
+│   ├── Dockerfile               # Python Alpine + ffmpeg + entrypoint (usuario no root)
 │   ├── pyproject.toml
 │   ├── uv.lock
 │   ├── .env.example
@@ -329,9 +329,11 @@ Los Dockerfiles estan en `backend/Dockerfile` y `frontend/Dockerfile` (no en `de
 
 #### `backend/Dockerfile`
 
-Build multi-stage con imagenes distroless (Google distroless):
-1. **builder**: `python:3.14-slim` + `uv`. Copia `pyproject.toml` y `uv.lock`, ejecuta `uv sync --frozen --no-dev`.
-2. **runtime**: `python:3.14-slim` con ffmpeg instalado via apt. Copia `.venv` del builder, el codigo y `entrypoint.sh`. Comando: `fastapi run main.py --port 8000`. Entrypoint: `/entrypoint.sh` que ejecuta `alembic upgrade head` antes de iniciar.
+Build multi-stage sobre Alpine (base minima para reducir superficie de ataque):
+1. **builder**: `python:3.14-alpine` + `uv` (version fijada, no `latest`). Copia `pyproject.toml` y `uv.lock`, ejecuta `uv sync --no-dev --no-build --locked`.
+2. **runtime**: `python:3.14-alpine` con `apk upgrade` + ffmpeg instalado via apk. Copia `.venv` del builder, el codigo y `entrypoint.sh`. Se ejecuta como usuario `app` (uid 10001), no root. Comando: `fastapi run main.py --port 8000`. Entrypoint: `/entrypoint.sh` que ejecuta `alembic upgrade head` antes de iniciar.
+
+La eleccion de Alpine es deliberada: la base Debian arrastraba perl, glibc, apt/dpkg y el arbol de dependencias completo de `ffmpeg` de Debian (mesa, SDL2, X11, llvm...), que concentraban practicamente todos los CVEs sin parche de la imagen. Las dependencias Python tienen ruedas `musllinux` para x86_64 y aarch64, por lo que `--no-build` sigue funcionando en las dos plataformas que construye el CI.
 
 #### `frontend/Dockerfile`
 
