@@ -15,7 +15,4 @@ router = APIRouter(prefix="/api/v1/points", tags=["Points"])
     )
 )
 def get_points(session: User = Depends(get_current_user)) -> PointsView:
-    with Session(engine) as session:
-        returnView = PointsView()
-        returnView.points = session.points
-        return returnView
+    return PointsView(points=session.points)
