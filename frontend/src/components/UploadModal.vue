@@ -25,13 +25,12 @@ const videoKey = ref('')
 const originalFilename = ref('')
 const errorMsg = ref('')
 const metadataWarning = ref('')
-const logs = ref<string[]>([])
-const activeChunk = ref(0)
-const totalChunks = ref(0)
+const statusMessage = ref('')
 const sentBytes = ref(0)
 const startedAt = ref(0)
 
 const CHUNK_SIZE = 5 * 1024 * 1024 // 5 MB
+const LOG_PREFIX = '[Clonetube][subida]'
 
 const canStartUpload = computed(() => Boolean(selectedFile.value && videoTitle.value.trim()))
 
@@ -59,8 +58,31 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
 
-function log(msg: string) {
-  logs.value.push(`[${new Date().toLocaleTimeString()}] ${msg}`)
+// El detalle técnico de la subida va a la consola del navegador; la pantalla
+// solo muestra mensajes en lenguaje llano.
+function debugLog(message: string, details?: Record<string, unknown>) {
+  if (details) console.debug(`${LOG_PREFIX} ${message}`, details)
+  else console.debug(`${LOG_PREFIX} ${message}`)
+}
+
+function errorLog(message: string, error?: unknown) {
+  if (error !== undefined) console.error(`${LOG_PREFIX} ${message}`, error)
+  else console.error(`${LOG_PREFIX} ${message}`)
+}
+
+function friendlyErrorMessage(error: unknown): string {
+  if (error instanceof TypeError) {
+    return 'Parece que se perdió la conexión. Revísala e inténtalo de nuevo.'
+  }
+
+  const raw = error instanceof Error ? error.message : ''
+  if (/\((401|403)\)/.test(raw)) {
+    return 'Tu sesión ha caducado. Vuelve a iniciar sesión para subir el video.'
+  }
+  if (/\(413\)/.test(raw)) {
+    return 'El video es demasiado grande para subirlo ahora mismo.'
+  }
+  return 'No hemos podido subir tu video. Vuelve a intentarlo en unos minutos.'
 }
 
 function titleFromFilename(filename: string): string {
@@ -76,11 +98,10 @@ function onFileSelected(e: Event) {
     videoDescription.value = ''
     step.value = 'idle'
     sentBytes.value = 0
-    activeChunk.value = 0
-    totalChunks.value = 0
-    logs.value = []
+    statusMessage.value = ''
     errorMsg.value = ''
     metadataWarning.value = ''
+    debugLog('Archivo seleccionado', { name: file.name, size: file.size, type: file.type })
   }
 }
 
@@ -90,79 +111,90 @@ async function startUpload() {
 
   step.value = 'uploading'
   sentBytes.value = 0
-  activeChunk.value = 0
   startedAt.value = Date.now()
   errorMsg.value = ''
+  metadataWarning.value = ''
+  statusMessage.value = 'Preparando tu video…'
   const token = getAccessToken()
 
   try {
     // ── 1. Reservar la subida en Clonetube ───────────────────────
-    log('Preparando la subida…')
+    debugLog('Preparando la subida…', { filename: file.name })
     const startData = await startMultipart(file.name, token)
     uploadId.value = startData.uploadId
     videoKey.value = startData.key
     originalFilename.value = startData.original_filename
-    log('Subida preparada en Clonetube.')
+    debugLog('Subida preparada en Clonetube', {
+      uploadId: startData.uploadId,
+      key: startData.key,
+    })
 
     // ── 2. Dividir en fragmentos y subir ─────────────────────────
-    totalChunks.value = Math.ceil(file.size / CHUNK_SIZE)
-    log(`Archivo: ${formatSize(file.size)} — ${totalChunks.value} fragmento(s)`)
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+    debugLog(`Archivo: ${formatSize(file.size)} — ${totalChunks} fragmento(s)`, {
+      size: file.size,
+      chunkSize: CHUNK_SIZE,
+      totalChunks,
+    })
+    statusMessage.value = 'Subiendo tu video…'
 
     const parts: MultipartPart[] = []
 
-    for (let i = 0; i < totalChunks.value; i++) {
+    for (let i = 0; i < totalChunks; i++) {
       const chunkNumber = i + 1
-      activeChunk.value = chunkNumber
       const start = i * CHUNK_SIZE
       const end = Math.min(start + CHUNK_SIZE, file.size)
       const chunk = new Blob([file.slice(start, end)])
 
-      log(`Fragmento ${chunkNumber}/${totalChunks.value}: emitiendo datos…`)
+      debugLog(`Fragmento ${chunkNumber}/${totalChunks}: emitiendo datos…`)
       const part = await uploadChunk(videoKey.value, uploadId.value, chunkNumber, chunk, token)
       parts.push(part)
       sentBytes.value = end
-      log(`Fragmento ${chunkNumber}/${totalChunks.value}: recibido.`)
+      debugLog(`Fragmento ${chunkNumber}/${totalChunks}: recibido`, { eTag: part.ETag })
     }
 
     // ── 3. Ensamblar el vídeo ────────────────────────────────────
-    log('Finalizando la subida…')
+    statusMessage.value = 'Casi listo, estamos guardando tu video…'
+    debugLog('Finalizando la subida…')
     const completeData = await completeMultipart(videoKey.value, uploadId.value, parts, token)
-    log('¡Carga completada con éxito!')
+    debugLog('Carga completada con éxito', { key: completeData.key })
 
     if (token) {
       try {
-        log('Guardando título y descripción…')
+        debugLog('Guardando título y descripción…')
         await updateVideoMetadataByKey(
           completeData.key,
           videoTitle.value.trim(),
           videoDescription.value.trim(),
           token,
         )
-        log('Metadatos del video guardados.')
+        debugLog('Metadatos del video guardados')
       } catch (metadataError: unknown) {
-        metadataWarning.value = metadataError instanceof Error
-          ? `El video se subió, pero sus datos no se pudieron guardar: ${metadataError.message}`
-          : 'El video se subió, pero sus datos no se pudieron guardar.'
-        log(`⚠️ ${metadataWarning.value}`)
+        metadataWarning.value =
+          'Tu video se subió, pero no pudimos guardar el título y la descripción. Puedes editarlos desde Clonetube Studio.'
+        errorLog('No se pudieron guardar los metadatos del video', metadataError)
       }
     } else {
-      metadataWarning.value = 'El video se subió, pero falta la sesión para guardar sus datos.'
+      metadataWarning.value =
+        'Tu video se subió, pero necesitas iniciar sesión para guardar el título y la descripción.'
+      debugLog('Sin sesión activa: no se guardan los metadatos del video')
     }
 
+    statusMessage.value = ''
     step.value = 'done'
     emit('uploaded', completeData.key)
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error desconocido'
-    errorMsg.value = msg
-    log(`❌ Error: ${msg}`)
+    errorMsg.value = friendlyErrorMessage(err)
+    errorLog('La subida ha fallado', err)
+    statusMessage.value = ''
     step.value = 'error'
 
     if (uploadId.value && videoKey.value) {
       try {
         await cancelMultipart(videoKey.value, uploadId.value, token)
-        log('Carga incompleta cancelada en el servidor.')
-      } catch {
-        log('No se pudo limpiar la carga incompleta automáticamente.')
+        debugLog('Carga incompleta cancelada en el servidor')
+      } catch (cancelError: unknown) {
+        errorLog('No se pudo limpiar la carga incompleta automáticamente', cancelError)
       }
     }
   }
@@ -174,15 +206,13 @@ function reset() {
   videoDescription.value = ''
   step.value = 'idle'
   sentBytes.value = 0
-  activeChunk.value = 0
-  totalChunks.value = 0
   startedAt.value = 0
   uploadId.value = ''
   videoKey.value = ''
   originalFilename.value = ''
   errorMsg.value = ''
   metadataWarning.value = ''
-  logs.value = []
+  statusMessage.value = ''
 }
 </script>
 
@@ -259,7 +289,7 @@ function reset() {
             <span class="progress-text">{{ progress }}%</span>
           </div>
           <p class="file-label">
-            Subiendo <strong>{{ originalFilename }}</strong>
+            Subiendo <strong>{{ videoTitle || originalFilename }}</strong>
           </p>
           <div class="data-transmission" aria-hidden="true">
             <div class="transmission-node source-node">
@@ -275,14 +305,12 @@ function reset() {
               <small>Clonetube</small>
             </div>
           </div>
-          <div class="transfer-stats" aria-live="polite">
-            <span>{{ sentSize }} / {{ totalSize }}</span>
-            <span>Fragmento {{ activeChunk }} de {{ totalChunks }}</span>
+          <p class="status-message" aria-live="polite">{{ statusMessage }}</p>
+          <div class="transfer-stats">
+            <span>{{ sentSize }} de {{ totalSize }}</span>
             <span>{{ uploadSpeed }}</span>
           </div>
-          <div class="logs">
-            <p v-for="(line, i) in logs" :key="i" class="log-line">{{ line }}</p>
-          </div>
+          <p class="upload-hint">No cierres esta ventana hasta que termine.</p>
         </div>
 
         <!-- Éxito -->
@@ -297,20 +325,14 @@ function reset() {
             <p v-if="videoDescription"><strong>Descripción:</strong> {{ videoDescription }}</p>
             <p><strong>Archivo:</strong> {{ originalFilename }}</p>
           </div>
-          <div class="logs">
-            <p v-for="(line, i) in logs" :key="i" class="log-line">{{ line }}</p>
-          </div>
           <button class="btn primary" @click="reset">Subir otro</button>
         </div>
 
         <!-- Error -->
         <div v-if="step === 'error'" class="result error">
           <div class="result-icon">❌</div>
-          <h3>Error en la subida</h3>
+          <h3>No se pudo subir el video</h3>
           <p class="error-msg">{{ errorMsg }}</p>
-          <div class="logs">
-            <p v-for="(line, i) in logs" :key="i" class="log-line">{{ line }}</p>
-          </div>
           <button class="btn" @click="reset">Intentar de nuevo</button>
         </div>
       </div>
@@ -573,21 +595,22 @@ function reset() {
   50% { transform: scale(1.08); }
 }
 
-/* ─── Logs ──────────────────────────────────────── */
-.logs {
-  background: #0f0f1a;
-  border-radius: 10px;
-  padding: 0.75rem;
-  max-height: 200px;
-  overflow-y: auto;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  margin: 0.75rem 0;
+/* ─── Estado de la subida ───────────────────────── */
+.status-message {
+  margin: 0.9rem 0 0.35rem;
+  color: #d8d7e4;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  min-height: 1.35rem;
 }
 
-.log-line { margin: 0; color: #8a8aaa; }
-.log-line:first-child { color: #c0c0e0; }
+.upload-hint {
+  margin: 0.9rem 0 0;
+  color: #6f6d81;
+  font-size: 0.78rem;
+  text-align: center;
+}
 
 /* ─── Resultado ─────────────────────────────────── */
 .result { text-align: center; }
