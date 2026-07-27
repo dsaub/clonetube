@@ -14,6 +14,7 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, nullable=False)
     password_reset_token_hash: Optional[str] = Field(default=None, nullable=True)
     password_reset_expires_at: Optional[datetime] = Field(default=None, nullable=True)
+    points: int = Field(default=0)
 
 class UserFollowsUser(SQLModel, table=True):
     """Relación de seguimiento entre usuarios (follower sigue a followed)."""
@@ -56,3 +57,10 @@ class MultipartUpload(SQLModel, table=True):
 class UserLikesVideo(SQLModel, table=True):
     video_id: uuid.UUID = Field(nullable=False, primary_key=True, foreign_key="video.id")
     user_id: uuid.UUID = Field(nullable=False, primary_key=True, foreign_key="user.id")
+
+
+class PointsHistory(SQLModel, table=True):
+    transaction_id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(nullable=False, foreign_key="user.id")
+    change: int
+    description: str

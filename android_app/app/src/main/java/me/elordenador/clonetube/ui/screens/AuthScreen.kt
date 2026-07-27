@@ -1,0 +1,178 @@
+package me.elordenador.clonetube.ui.screens
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import me.elordenador.clonetube.ui.components.IconButtonBox
+import me.elordenador.clonetube.ui.components.IconClose
+import me.elordenador.clonetube.ui.components.LabeledField
+import me.elordenador.clonetube.ui.components.PrimaryButton
+import me.elordenador.clonetube.ui.state.AuthMode
+import me.elordenador.clonetube.ui.state.ClonetubeAppState
+import me.elordenador.clonetube.ui.theme.Accent300
+import me.elordenador.clonetube.ui.theme.Neutral400
+import me.elordenador.clonetube.ui.theme.TextColor
+
+@Composable
+fun AuthScreen(state: ClonetubeAppState) {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            IconButtonBox(onClick = state::closeOverlay, size = 32.dp) { IconClose(TextColor) }
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp),
+        ) {
+            Text(
+                text = if (state.authMode == AuthMode.LOGIN) "INICIAR SESIÓN" else "CREAR CUENTA",
+                color = Accent300,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.32.sp,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+
+            when (state.authMode) {
+                AuthMode.LOGIN -> LoginForm(state)
+                AuthMode.REGISTER -> RegisterForm(state)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoginForm(state: ClonetubeAppState) {
+    Heading("Bienvenido de nuevo", "Inicia sesión para continuar en Clonetube.")
+    LabeledField(
+        label = "Usuario",
+        value = state.loginUsername,
+        onValueChange = { state.loginUsername = it },
+        modifier = Modifier.padding(bottom = 12.dp),
+    )
+    LabeledField(
+        label = "Contraseña",
+        value = state.loginPassword,
+        onValueChange = { state.loginPassword = it },
+        isPassword = true,
+        keyboardType = KeyboardType.Password,
+        modifier = Modifier.padding(bottom = 20.dp),
+    )
+    PrimaryButton(
+        label = "Iniciar sesión",
+        onClick = state::submitAuth,
+        enabled = state.loginEnabled,
+        modifier = Modifier.fillMaxWidth(),
+        height = 46.dp,
+    )
+    SwitchModePrompt(
+        question = "¿Todavía no tienes cuenta?",
+        action = "Regístrate",
+        onClick = { state.switchAuthMode(AuthMode.REGISTER) },
+    )
+}
+
+@Composable
+private fun RegisterForm(state: ClonetubeAppState) {
+    Heading("Crea tu cuenta", "Completa tus datos para empezar.")
+    LabeledField(
+        label = "Usuario",
+        value = state.registerUsername,
+        onValueChange = { state.registerUsername = it },
+        modifier = Modifier.padding(bottom = 12.dp),
+    )
+    LabeledField(
+        label = "Nombre completo",
+        value = state.registerName,
+        onValueChange = { state.registerName = it },
+        modifier = Modifier.padding(bottom = 12.dp),
+    )
+    LabeledField(
+        label = "Correo electrónico",
+        value = state.registerEmail,
+        onValueChange = { state.registerEmail = it },
+        keyboardType = KeyboardType.Email,
+        modifier = Modifier.padding(bottom = 12.dp),
+    )
+    LabeledField(
+        label = "Contraseña",
+        value = state.registerPassword,
+        onValueChange = { state.registerPassword = it },
+        isPassword = true,
+        keyboardType = KeyboardType.Password,
+        modifier = Modifier.padding(bottom = 20.dp),
+    )
+    PrimaryButton(
+        label = "Registrarse",
+        onClick = state::submitAuth,
+        enabled = state.registerEnabled,
+        modifier = Modifier.fillMaxWidth(),
+        height = 46.dp,
+    )
+    SwitchModePrompt(
+        question = "¿Ya tienes una cuenta?",
+        action = "Inicia sesión",
+        onClick = { state.switchAuthMode(AuthMode.LOGIN) },
+    )
+}
+
+@Composable
+private fun Heading(title: String, subtitle: String) {
+    Text(
+        text = title,
+        color = TextColor,
+        fontSize = 32.sp,
+        lineHeight = 36.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = (-0.48).sp,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+    Text(
+        text = subtitle,
+        color = Neutral400,
+        fontSize = 13.sp,
+        lineHeight = 20.sp,
+        modifier = Modifier.padding(bottom = 20.dp),
+    )
+}
+
+@Composable
+private fun SwitchModePrompt(question: String, action: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 18.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("$question ", color = Neutral400, fontSize = 13.sp)
+        Text(
+            text = action,
+            color = Accent300,
+            fontSize = 13.sp,
+            modifier = Modifier.clickable(onClick = onClick),
+        )
+    }
+}

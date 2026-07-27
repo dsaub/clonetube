@@ -1,5 +1,18 @@
 services:
 
+  mariadb:
+    image: mariadb:11
+    ports:
+      - "3306:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-rootpassword}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-clonetube}
+      MARIADB_USER: ${MARIADB_USER:-clonetube}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-clonetube}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    restart: unless-stopped
+
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"

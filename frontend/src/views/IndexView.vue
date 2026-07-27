@@ -123,7 +123,7 @@ onMounted(loadVideos)
         </p>
       </nav>
 
-      <main class="home-content" aria-labelledby="library-title">
+      <main class="library home-content" aria-labelledby="library-title">
         <div v-if="user.logged_in" class="feed-tabs" role="tablist" aria-label="Tipo de feed">
           <button
             type="button"

@@ -214,3 +214,6 @@ class UserResponse(BaseModel):
     username: str
     full_name: str
     email: str
+
+class PointsView(BaseModel):
+    points: int
