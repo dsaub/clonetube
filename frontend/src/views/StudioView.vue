@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import Header from '@/components/Header.vue'
-import TvModalShell from '@/components/TvModalShell.vue'
+import UploadModal from '@/components/UploadModal.vue'
 import {
   deleteStudioVideo,
   listStudioVideos,
@@ -21,10 +21,7 @@ const loading = ref(false)
 const error = ref('')
 const notice = ref('')
 const busyId = ref('')
-const deleteTarget = ref<VideoDraft | null>(null)
-const deleteError = ref('')
-const deleteModal = ref<InstanceType<typeof TvModalShell> | null>(null)
-const cancelDeleteButton = ref<HTMLButtonElement | null>(null)
+const uploadOpen = ref(false)
 
 const visibilityLabels: Record<VideoVisibility, string> = {
   public: 'Público',
@@ -66,47 +63,19 @@ async function save(video: VideoDraft) {
   }
 }
 
-function requestRemove(video: VideoDraft) {
-  deleteTarget.value = video
-  deleteError.value = ''
-  void nextTick(() => cancelDeleteButton.value?.focus({ preventScroll: true }))
-}
-
-function closeDelete() {
-  deleteModal.value?.close()
-}
-
-function finishDeleteClose() {
-  deleteTarget.value = null
-  deleteError.value = ''
-}
-
-async function confirmRemove() {
-  const video = deleteTarget.value
+async function remove(video: VideoDraft) {
   const token = user.token?.access_token
-  if (!video || !token) return
-
+  if (!token || !window.confirm(`¿Eliminar “${video.title}” definitivamente?`)) return
   busyId.value = video.id
   error.value = ''
-  notice.value = ''
-  deleteError.value = ''
-  let deleted = false
   try {
     await deleteStudioVideo(video.id, token)
     videos.value = videos.value.filter(({ id }) => id !== video.id)
     notice.value = 'Vídeo eliminado.'
-    deleted = true
   } catch (cause: unknown) {
-    const message = cause instanceof Error ? cause.message : 'No se ha podido eliminar el vídeo.'
-    error.value = message
-    deleteError.value = message
+    error.value = cause instanceof Error ? cause.message : 'No se ha podido eliminar el vídeo.'
   } finally {
     busyId.value = ''
-  }
-
-  if (deleted) {
-    await nextTick()
-    closeDelete()
   }
 }
 
@@ -120,6 +89,13 @@ async function copyLink(video: VideoDraft) {
   } catch {
     error.value = 'No se ha podido copiar el enlace.'
   }
+}
+
+function onUploaded() {
+  uploadOpen.value = false
+  notice.value = 'El vídeo ya está disponible en tu canal.'
+  const token = user.token?.access_token
+  if (token) void loadVideos(token)
 }
 
 function formatDate(value: string): string {
@@ -151,7 +127,14 @@ watch(() => user.token?.access_token, (token) => {
             <span>CLONETUBE STUDIO</span>
             <h1>Contenido del canal</h1>
           </div>
-          <RouterLink to="/" class="upload-link">+ Subir vídeo</RouterLink>
+          <button
+            v-if="user.logged_in"
+            type="button"
+            class="upload-link"
+            @click="uploadOpen = true"
+          >
+            <span aria-hidden="true">↑</span> Subir vídeo
+          </button>
         </div>
 
         <div v-if="!user.logged_in" class="state-card">
@@ -165,6 +148,9 @@ watch(() => user.token?.access_token, (token) => {
         <div v-else-if="videos.length === 0" class="state-card">
           <h2>Aún no has subido vídeos</h2>
           <p>Cuando publiques el primero aparecerá aquí.</p>
+          <button type="button" class="upload-link" @click="uploadOpen = true">
+            <span aria-hidden="true">↑</span> Subir vídeo
+          </button>
         </div>
 
         <template v-else>
@@ -234,7 +220,7 @@ watch(() => user.token?.access_token, (token) => {
                   type="button"
                   class="delete-button"
                   :disabled="busyId === video.id"
-                  @click="requestRemove(video)"
+                  @click="remove(video)"
                 >Eliminar</button>
               </div>
             </article>
@@ -243,44 +229,11 @@ watch(() => user.token?.access_token, (token) => {
       </main>
     </div>
 
-    <TvModalShell
-      v-if="deleteTarget"
-      ref="deleteModal"
-      labelledby="delete-video-title"
-      max-width="30rem"
-      :can-close="busyId !== deleteTarget.id"
-      @close="finishDeleteClose"
-    >
-      <div class="delete-confirmation">
-        <span class="signal-label">CH 03 · DELETE</span>
-        <div class="delete-heading">
-          <span class="warning-icon" aria-hidden="true">!</span>
-          <div>
-            <h1 id="delete-video-title">¿Eliminar este vídeo?</h1>
-            <p>Esta acción es permanente y no se puede deshacer.</p>
-          </div>
-        </div>
-
-        <div class="delete-video-name">“{{ deleteTarget.title }}”</div>
-        <p v-if="deleteError" class="delete-error" role="alert">{{ deleteError }}</p>
-
-        <div class="delete-modal-actions">
-          <button
-            ref="cancelDeleteButton"
-            type="button"
-            class="cancel-delete-button"
-            :disabled="busyId === deleteTarget.id"
-            @click="closeDelete"
-          >Cancelar</button>
-          <button
-            type="button"
-            class="confirm-delete-button"
-            :disabled="busyId === deleteTarget.id"
-            @click="confirmRemove"
-          >{{ busyId === deleteTarget.id ? 'Eliminando…' : 'Eliminar definitivamente' }}</button>
-        </div>
-      </div>
-    </TvModalShell>
+    <UploadModal
+      v-if="uploadOpen"
+      @close="uploadOpen = false"
+      @uploaded="onUploaded"
+    />
   </div>
 </template>
 
@@ -297,7 +250,9 @@ watch(() => user.token?.access_token, (token) => {
 .studio-heading span { color: #8882ff; font-size: .68rem; font-weight: 800; letter-spacing: .16em; }
 .studio-heading h1 { margin-top: .35rem; color: #f5f4ff; font-size: clamp(1.7rem, 3vw, 2.4rem); }
 .upload-link, .save-button { border: 1px solid #6c63ff; border-radius: .55rem; background: #6c63ff; color: white; font-weight: 750; }
-.upload-link { padding: .7rem 1rem; }
+.upload-link { display: inline-flex; align-items: center; gap: .45rem; padding: .7rem 1rem; cursor: pointer; font: inherit; font-weight: 750; white-space: nowrap; }
+.upload-link:hover { background: #7a72ff; }
+.state-card .upload-link { margin-top: 1.25rem; }
 .messages { min-height: 2.3rem; }
 .message { margin-bottom: .8rem; padding: .65rem .8rem; border-radius: .5rem; font-size: .85rem; }
 .message.error, .state-card.error { border: 1px solid #6b303c; background: #26171d; color: #ff9da8; }
@@ -323,22 +278,6 @@ label small { color: #777587; font-weight: 400; }
 .row-actions button:disabled { cursor: wait; opacity: .5; }
 .delete-button { border: 1px solid #5e3540; border-radius: .55rem; background: transparent; color: #ff929f; }
 .delete-button:hover { background: rgba(255, 90, 108, .1); }
-.delete-confirmation { position: relative; z-index: 1; }
-.signal-label { display: block; margin-bottom: 1rem; color: #ff7f8d; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .7rem; font-weight: 800; letter-spacing: .12em; }
-.delete-heading { display: flex; align-items: flex-start; gap: .9rem; padding-right: 1.5rem; }
-.delete-heading h1 { color: #fff; font-size: 1.55rem; line-height: 1.2; }
-.delete-heading p { margin-top: .45rem; color: #aaaabd; font-size: .9rem; line-height: 1.5; }
-.warning-icon { display: grid; flex: 0 0 2.5rem; height: 2.5rem; place-items: center; border: 1px solid #7b3b47; border-radius: 50%; background: rgba(239, 102, 116, .12); color: #ff8994; font-size: 1.2rem; font-weight: 850; }
-.delete-video-name { overflow: hidden; margin-top: 1.35rem; padding: .8rem .9rem; border: 1px solid #3b3b56; border-radius: .5rem; background: #12121e; color: #e9e8f0; font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
-.delete-error { margin-top: .85rem; color: #ff7b88; font-size: .81rem; line-height: 1.4; }
-.delete-modal-actions { display: grid; grid-template-columns: 1fr 1.5fr; gap: .75rem; margin-top: 1.4rem; }
-.delete-modal-actions button { min-height: 2.8rem; padding: .7rem 1rem; border-radius: .5rem; cursor: pointer; font: inherit; font-weight: 750; transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
-.delete-modal-actions button:not(:disabled):hover { transform: translateY(-1px); }
-.delete-modal-actions button:disabled { cursor: wait; opacity: .55; }
-.cancel-delete-button { border: 1px solid #46445d; background: #20202f; color: #d8d7e4; }
-.cancel-delete-button:hover:not(:disabled) { border-color: #66627f; background: #29283a; }
-.confirm-delete-button { border: 1px solid #ef6674; background: #d94f5f; color: #fff; }
-.confirm-delete-button:hover:not(:disabled) { background: #ed5c6c; box-shadow: 0 8px 22px rgba(239, 102, 116, .22); }
 @media (max-width: 1050px) {
   .studio-layout { grid-template-columns: 1fr; }
   .studio-sidebar { display: none; }
@@ -348,6 +287,5 @@ label small { color: #777587; font-weight: 400; }
 @media (max-width: 650px) {
   .video-row { grid-template-columns: 1fr; }
   .studio-heading { align-items: flex-start; flex-direction: column; }
-  .delete-modal-actions { grid-template-columns: 1fr; }
 }
 </style>

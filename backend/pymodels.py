@@ -29,6 +29,11 @@ class SignChunkResponse(BaseModel):
     url: str
 
 
+class UploadChunkResponse(BaseModel):
+    PartNumber: int
+    ETag: str
+
+
 class CompleteMultipartResponse(BaseModel):
     status: str
     location: Optional[str] = None
@@ -62,6 +67,20 @@ class StudioVideoResponse(BaseModel):
     videos: list[StudioVideoItem]
 
 
+class VideoCatalogItem(BaseModel):
+    id: uuid.UUID
+    filename: str
+    title: str
+    description: str
+    author_id: uuid.UUID
+    author_username: str
+    author_name: str
+
+
+class VideoCatalogResponse(BaseModel):
+    videos: list[VideoCatalogItem]
+
+
 class VideoDetail(BaseModel):
     id: uuid.UUID
     key: str
@@ -83,6 +102,39 @@ class VideoUpdate(BaseModel):
 class StreamUrlResponse(BaseModel):
     url: str
     key: str
+
+
+# ─── Feed ─────────────────────────────────────────────────────────
+
+class FeedVideoItem(VideoCatalogItem):
+    created_at: str
+    likes: int
+    score: float
+    from_followed_author: bool
+
+
+class FeedResponse(BaseModel):
+    videos: list[FeedVideoItem]
+    following_count: int
+    personalized: bool
+
+
+# ─── Seguidores ───────────────────────────────────────────────────
+
+class PublicUser(BaseModel):
+    id: uuid.UUID
+    username: str
+    full_name: str
+
+
+class FollowStateResponse(BaseModel):
+    username: str
+    following: bool
+    followers: int
+
+
+class FollowingListResponse(BaseModel):
+    users: list[PublicUser]
 
 
 # ─── Auth ─────────────────────────────────────────────────────────

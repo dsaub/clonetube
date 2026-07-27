@@ -1,13 +1,19 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue'
 import Header from '@/components/Header.vue'
-import { listVideosWithMetadata, type VideoCatalogItem } from '@/api/video'
+import { loadHomeVideos, type FeedVideo } from '@/api/feed'
+import { useUserStore } from '@/stores/user'
 
-const videos = ref<VideoCatalogItem[]>([])
+const user = useUserStore()
+const videos = ref<FeedVideo[]>([])
 const loading = ref(true)
 const error = ref('')
 const searchQuery = ref('')
+const onlyFollowing = ref(false)
 
+const followedCount = computed(
+  () => videos.value.filter((video) => video.fromFollowedAuthor).length,
+)
 const normalizedSearch = computed(() => normalizeSearch(searchQuery.value))
 const filteredVideos = computed(() => {
   if (!normalizedSearch.value) return videos.value
@@ -43,12 +49,20 @@ async function loadVideos() {
   error.value = ''
 
   try {
-    videos.value = await listVideosWithMetadata()
+    videos.value = await loadHomeVideos(user.token?.access_token, {
+      onlyFollowing: onlyFollowing.value,
+    })
   } catch (cause: unknown) {
     error.value = cause instanceof Error ? cause.message : 'No se han podido cargar los videos.'
   } finally {
     loading.value = false
   }
+}
+
+function selectFeed(followingOnly: boolean) {
+  if (onlyFollowing.value === followingOnly) return
+  onlyFollowing.value = followingOnly
+  void loadVideos()
 }
 
 function formatSize(bytes: number): string {
@@ -75,8 +89,63 @@ onMounted(loadVideos)
   <div class="home-page">
     <Header v-model:search-query="searchQuery" />
 
-    <main class="home-content">
-      <section class="library" aria-labelledby="library-title">
+    <div class="app-shell">
+      <nav class="app-sidebar" aria-label="Navegación principal">
+        <button
+          type="button"
+          class="side-item"
+          :class="{ active: !onlyFollowing }"
+          @click="selectFeed(false)"
+        >
+          <span class="side-icon" aria-hidden="true">⌂</span>
+          Inicio
+        </button>
+        <button
+          v-if="user.logged_in"
+          type="button"
+          class="side-item"
+          :class="{ active: onlyFollowing }"
+          @click="selectFeed(true)"
+        >
+          <span class="side-icon" aria-hidden="true">☆</span>
+          Siguiendo
+        </button>
+
+        <hr class="side-divider" />
+
+        <RouterLink v-if="user.logged_in" to="/studio" class="side-item">
+          <span class="side-icon" aria-hidden="true">▦</span>
+          Studio
+        </RouterLink>
+        <p v-else class="side-hint">
+          Inicia sesión desde la cabecera para seguir canales y subir vídeos.
+        </p>
+      </nav>
+
+      <main class="home-content" aria-labelledby="library-title">
+        <div v-if="user.logged_in" class="feed-tabs" role="tablist" aria-label="Tipo de feed">
+          <button
+            type="button"
+            role="tab"
+            class="feed-tab"
+            :class="{ active: !onlyFollowing }"
+            :aria-selected="!onlyFollowing"
+            @click="selectFeed(false)"
+          >
+            Para ti
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="feed-tab"
+            :class="{ active: onlyFollowing }"
+            :aria-selected="onlyFollowing"
+            @click="selectFeed(true)"
+          >
+            Siguiendo
+          </button>
+        </div>
+
         <div class="section-heading">
           <div>
             <span class="section-kicker">
@@ -85,6 +154,9 @@ onMounted(loadVideos)
             <h2 id="library-title">
               {{ normalizedSearch ? 'Videos encontrados' : 'Videos disponibles' }}
             </h2>
+            <p v-if="!normalizedSearch && followedCount > 0" class="feed-hint">
+              {{ followedCount }} de tus canales seguidos encabezan tu feed.
+            </p>
             <p v-if="resultSummary" id="search-summary" class="result-summary" aria-live="polite">
               {{ resultSummary }}
             </p>
@@ -109,10 +181,20 @@ onMounted(loadVideos)
           <button type="button" @click="loadVideos">Reintentar</button>
         </div>
 
+        <div v-else-if="videos.length === 0 && onlyFollowing" class="empty-state following-empty">
+          <span aria-hidden="true">☆</span>
+          <h3>Todavía no sigues a nadie</h3>
+          <p>Sigue a un canal desde la página de un video y sus emisiones aparecerán aquí.</p>
+          <button type="button" @click="selectFeed(false)">Ver todos los videos</button>
+        </div>
+
         <div v-else-if="videos.length === 0" class="empty-state">
           <span aria-hidden="true">□</span>
           <h3>La biblioteca está vacía</h3>
-          <p>Todavía no hay videos disponibles.</p>
+          <p>Sube el primer video desde Studio para empezar a emitir.</p>
+          <RouterLink v-if="user.logged_in" to="/studio" class="empty-action">
+            Ir a Studio
+          </RouterLink>
         </div>
 
         <div v-else-if="filteredVideos.length === 0" class="empty-state search-empty">
@@ -133,6 +215,7 @@ onMounted(loadVideos)
             <div class="video-cover">
               <span class="video-noise"></span>
               <span class="card-play">▶</span>
+              <span v-if="video.fromFollowedAuthor" class="following-pill">SIGUIENDO</span>
               <span class="size-pill">{{ formatSize(video.size) }}</span>
             </div>
             <div class="video-info">
@@ -144,24 +227,82 @@ onMounted(loadVideos)
             </div>
           </RouterLink>
         </div>
-      </section>
-    </main>
+      </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .home-page {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 82% 12%, rgba(108, 99, 255, 0.1), transparent 27rem),
-    #0f0f1a;
+  background: #0f0f1a;
   color: #e0e0e0;
 }
 
+.app-shell {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  align-items: start;
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1rem 0.75rem;
+}
+
+.side-item {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: #cfcddd;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-align: left;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.side-item:hover { background: #1e1e2e; color: #fff; }
+
+.side-item.active {
+  background: #26243d;
+  color: #dcd9ff;
+  font-weight: 750;
+}
+
+.side-icon {
+  flex: 0 0 1.25rem;
+  color: #8882ff;
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+.side-divider {
+  margin: 0.85rem 0.35rem;
+  border: 0;
+  border-top: 1px solid #26253a;
+}
+
+.side-hint {
+  padding: 0 0.85rem;
+  color: #777587;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
 .home-content {
-  width: min(1180px, calc(100% - 2rem));
-  margin: 0 auto;
-  padding: clamp(1.5rem, 4vw, 3rem) 0 5rem;
+  min-width: 0;
+  padding: 1rem clamp(1rem, 3vw, 2.5rem) 4rem;
 }
 
 .section-kicker {
@@ -186,10 +327,48 @@ onMounted(loadVideos)
   letter-spacing: -0.035em;
 }
 
-.result-summary {
+.result-summary,
+.feed-hint {
   margin-top: 0.38rem;
   color: #858294;
   font-size: 0.82rem;
+}
+
+.feed-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  margin-bottom: 1.35rem;
+  padding: 0.35rem 0 0.85rem;
+  background: linear-gradient(#0f0f1a 72%, rgba(15, 15, 26, 0));
+  scrollbar-width: none;
+}
+
+.feed-tabs::-webkit-scrollbar { display: none; }
+
+.feed-tab {
+  flex: 0 0 auto;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid #38364e;
+  border-radius: 999px;
+  background: #181824;
+  color: #b3b1c0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.feed-tab:hover { border-color: #4b4772; }
+
+.feed-tab.active {
+  border-color: #7c75ff;
+  background: #24223d;
+  color: #dcd9ff;
 }
 
 .refresh-button {
@@ -207,25 +386,14 @@ onMounted(loadVideos)
 
 .video-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 2.25rem 1rem;
 }
 
 .video-card {
   display: block;
   min-width: 0;
-  padding: 0.55rem;
-  border: 1px solid transparent;
-  border-radius: 0.9rem;
-  background: rgba(25, 25, 39, 0.72);
   color: inherit;
-  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
-}
-
-.video-card:hover {
-  border-color: #3e3b5b;
-  background: #1c1c2b;
-  transform: translateY(-3px);
 }
 
 .video-cover {
@@ -234,9 +402,12 @@ onMounted(loadVideos)
   aspect-ratio: 16 / 9;
   place-items: center;
   overflow: hidden;
-  border-radius: 0.58rem;
+  border-radius: 0.75rem;
   background: linear-gradient(135deg, #26244b, #12121e 68%);
+  transition: border-radius 180ms ease;
 }
+
+.video-card:hover .video-cover { border-radius: 0.25rem; }
 
 .video-noise {
   position: absolute;
@@ -260,6 +431,20 @@ onMounted(loadVideos)
 
 .video-card:hover .card-play { transform: scale(1.1); }
 
+.following-pill {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #7c75ff;
+  border-radius: 0.3rem;
+  background: rgba(108, 99, 255, 0.85);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
 .size-pill {
   position: absolute;
   right: 0.55rem;
@@ -272,16 +457,18 @@ onMounted(loadVideos)
   font-weight: 700;
 }
 
-.video-info { padding: 0.75rem 0.35rem 0.45rem; }
+.video-info { padding: 0.8rem 0.15rem 0; }
 
 .video-info h3 {
+  display: -webkit-box;
   overflow: hidden;
   margin: 0;
   color: #e8e7f0;
-  font-size: 0.94rem;
+  font-size: 0.98rem;
   font-weight: 680;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .video-info p {
@@ -315,7 +502,8 @@ onMounted(loadVideos)
 .empty-state h3 { color: #d8d7e2; }
 .empty-state p { font-size: 0.9rem; }
 
-.empty-state button {
+.empty-state button,
+.empty-action {
   margin-top: 0.55rem;
   padding: 0.55rem 0.75rem;
   border: 1px solid #4b4772;
@@ -335,7 +523,21 @@ onMounted(loadVideos)
 .skeleton-line { width: 52%; height: 0.65rem; margin: 0.65rem 0.35rem 0; border-radius: 99px; background: #29283a; }
 .skeleton-line.wide { width: 78%; margin-top: 0.85rem; }
 
+@media (max-width: 1050px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .app-sidebar {
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    border-bottom: 1px solid #26253a;
+  }
+  .side-item { width: auto; white-space: nowrap; }
+  .side-divider,
+  .side-hint { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .video-card { transition: none; }
+  .video-cover { transition: none; }
 }
 </style>

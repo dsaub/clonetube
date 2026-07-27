@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session
 
@@ -30,6 +30,28 @@ def get_optional_user(
     session: Session = Depends(get_session),
 ) -> User | None:
     """Devuelve el usuario si hay JWT; mantiene públicos los vídeos accesibles por enlace."""
+    return _optional_user(token, session)
+
+
+def get_optional_user_allowing_query_token(
+    header_token: str | None = Depends(optional_oauth2_scheme),
+    query_token: str | None = Query(
+        default=None,
+        alias="token",
+        description="JWT alternativo al header Authorization, para clientes que no "
+        "pueden enviar cabeceras (por ejemplo el elemento <video> del navegador).",
+    ),
+    session: Session = Depends(get_session),
+) -> User | None:
+    """Como `get_optional_user`, pero acepta también el JWT en la query string.
+
+    El `<video src>` del navegador no permite añadir cabeceras, así que la URL de
+    reproducción lleva el token incrustado igual que hacía la firma prefirmada.
+    """
+    return _optional_user(header_token or query_token, session)
+
+
+def _optional_user(token: str | None, session: Session) -> User | None:
     if token is None:
         return None
     try:

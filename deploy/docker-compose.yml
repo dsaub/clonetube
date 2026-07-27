@@ -54,7 +54,12 @@ services:
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-clonetube}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
-      S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-http://localhost:9000}
+      # Opcional: el navegador ya no habla con MinIO. Los fragmentos van por
+      # /api/v1/video/upload-chunk y el vídeo se sirve por /api/v1/video/stream,
+      # así que MinIO puede quedarse en la red interna. Definir esta variable
+      # sólo habilita /sign-chunk (subida directa al bucket) y, si apunta a un
+      # host que el navegador no alcanza, esa ruta devuelve 404.
+      S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-}
       DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://clonetube:password@mariadb:3306/clonetube}
       JWT_SECRET: ${JWT_SECRET:-cambiar-por-clave-segura-de-al-menos-32-byts}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}

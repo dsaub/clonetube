@@ -47,7 +47,7 @@ clonetube/
 │   │   ├── views/
 │   │   │   └── DevView.vue      # Sandbox de desarrollo (multipart upload)
 │   │   └── components/
-│   │       └── UploadModal.vue   # Modal de subida multipart a S3
+│   │       └── UploadModal.vue   # Modal de subida por fragmentos
 │   ├── Dockerfile               # Imagen Node multi-stage + Caddy distroless
 │   ├── index.html
 │   ├── package.json
@@ -114,16 +114,37 @@ API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor
 | Metodo | Ruta | Proposito |
 |---|---|---|
 | `POST` | `/api/v1/video/start-multipart` | Inicia un multipart upload en S3. Recibe `original_filename` por query. Genera key UUID. Devuelve `uploadId`, `key`, `original_filename`. |
-| `GET` | `/api/v1/video/sign-chunk` | Genera URL prefirmada (1h) para subir un fragmento. Parametros: `filename`, `upload_id`, `chunk_number`. |
+| `PUT` | `/api/v1/video/upload-chunk` | Recibe el fragmento y lo reenvia a S3 con el cliente interno. Parametros: `filename`, `upload_id`, `chunk_number`. Devuelve el `ETag`. Es el camino que usa el frontend. |
+| `GET` | `/api/v1/video/sign-chunk` | Genera URL prefirmada (1h) para subir un fragmento. Parametros: `filename`, `upload_id`, `chunk_number`. Solo sirve si el bucket es accesible desde el navegador. |
 | `POST` | `/api/v1/video/complete-multipart` | Completa el multipart upload. Recibe `filename`, `uploadId`, `parts[]` en el body. |
 | `GET` | `/api/v1/video/list` | Lista videos en S3 con metadatos (size, last_modified, original_filename). |
-| `GET` | `/api/v1/video/stream-url` | Genera URL prefirmada (24h) para streaming de un video. |
+| `GET` | `/api/v1/video/stream-url` | Devuelve la URL de reproduccion (`/api/v1/video/stream`). Para videos no publicos incluye el JWT en la query string. |
+| `GET` | `/api/v1/video/stream` | Sirve el video desde S3 con soporte de `Range`. Acepta el JWT por header o por query param `token`. |
 | `POST` | `/api/v1/auth/register` | Registra un nuevo usuario. Devuelve token JWT. |
 | `POST` | `/api/v1/auth/login` | Inicia sesion con username/password. Devuelve token JWT. |
 | `POST` | `/api/v1/auth/change-password` | Cambia la contraseña (requiere auth). Incrementa `password_version` invalidando tokens anteriores. |
 | `POST` | `/api/v1/auth/forgot-password` | Solicita restablecimiento de contraseña. Genera token hash con expiracion de 15 min. |
 | `POST` | `/api/v1/auth/reset-password` | Restablece contraseña con token. Incrementa `password_version`. |
 | `GET` | `/api/v1/auth/me` | Devuelve datos del usuario autenticado. |
+| `GET` | `/api/v1/video/feed` | Feed personalizado. Prioriza a los autores seguidos; admite `limit` y `only_following`. |
+| `GET` | `/api/v1/users/{username}/follow` | Estado de seguimiento (auth opcional) y numero de seguidores. |
+| `POST` | `/api/v1/users/{username}/follow` | Seguir a un usuario (idempotente). |
+| `DELETE` | `/api/v1/users/{username}/follow` | Dejar de seguir a un usuario (idempotente). |
+| `GET` | `/api/v1/users/me/following` | Usuarios seguidos por el usuario autenticado. |
+
+### Algoritmo del feed (`feed.py`)
+
+Modulo puro, sin acceso a BD ni a S3, para poder probarlo aislado:
+
+- `recency_score`: decaimiento exponencial con semivida de 72 h.
+- `popularity_score`: `log1p(likes)`, crecimiento sublineal.
+- `score_candidate`: suma novedad, popularidad y `FOLLOW_BOOST`.
+- `rank_candidates`: los seguidos forman un bloque que va siempre delante
+  (criterio de orden, no sumando) y dentro de cada bloque una seleccion voraz
+  penaliza al autor que ya ha colocado videos (`AUTHOR_DIVERSITY_PENALTY`).
+  Los empates se resuelven por `video_id` para que el orden sea determinista.
+
+Las consultas de la relacion de seguimiento viven en `follows.py`.
 
 ### Analisis tecnico
 
@@ -207,9 +228,11 @@ Componente modal completo que implementa el flujo multipart upload cliente:
 - **Fragmentacion**: chunks de 5 MB.
 - **Flujo**:
   1. `POST /api/v1/video/start-multipart` — inicia la subida.
-  2. Por cada chunk: `GET /api/v1/video/sign-chunk` → `PUT <presigned-url>`.
+  2. Por cada chunk: `PUT /api/v1/video/upload-chunk` — el fragmento viaja por la API,
+     que lo reenvia a S3. Asi la subida no depende de que el bucket sea accesible
+     desde el navegador (era el origen del 404 al subir).
   3. `POST /api/v1/video/complete-multipart` — completa la subida.
-- **UI**: drop zone, barra de progreso, logs en tiempo real, pantalla de exito con key y location, pantalla de error.
+- **UI**: drop zone, barra de progreso, logs en tiempo real, pantalla de exito, pantalla de error.
 - Estilos scoped con diseño moderno (modal, overlay con backdrop-blur, gradientes).
 
 ### Dependencias

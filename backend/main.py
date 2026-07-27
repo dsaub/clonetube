@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from graphql_api import GraphQLRateLimitMiddleware, graphql_router
 from routes.login import router as auth_router
+from routes.social import router as social_router
 from routes.video import router as video_router
 
 app = FastAPI(
@@ -15,8 +15,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# ── CORS (permitir peticiones desde el frontend) ──    
-app.add_middleware(GraphQLRateLimitMiddleware)
+# ── CORS (permitir peticiones desde el frontend) ──
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,8 +25,8 @@ app.add_middleware(
 )
 # ── Routers ──
 app.include_router(auth_router)
+app.include_router(social_router)
 app.include_router(video_router)
-app.include_router(graphql_router, prefix="/graphql")
 
 if __name__ == "__main__":
     import uvicorn
