@@ -98,6 +98,25 @@ describe('UploadModal.vue', () => {
     expect(errorMsg.exists()).toBe(true)
   })
 
+  it('shows a plain-language error instead of the raw API message', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 })
+    const wrapper = mountModal()
+    const file = createFile()
+    const input = wrapper.find('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [file] })
+    await input.trigger('change')
+    await wrapper.find('.btn.primary').trigger('click')
+
+    const errorText = wrapper.get('.error-msg').text()
+    expect(errorText).toBe('No hemos podido subir tu video. Vuelve a intentarlo en unos minutos.')
+    expect(errorText).not.toContain('multipart')
+    expect(errorText).not.toContain('500')
+    // El detalle técnico sigue disponible, pero solo en la consola.
+    expect(consoleError).toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
+
   it('completes full upload flow successfully', async () => {
     const uploadId = 'upload-123'
     const videoKey = 'videos/uuid-456'
@@ -134,6 +153,40 @@ describe('UploadModal.vue', () => {
     const [chunkUrl, chunkInit] = mockFetch.mock.calls[1] ?? []
     expect(chunkUrl).toContain('/api/v1/video/upload-chunk')
     expect(chunkInit?.method).toBe('PUT')
+  })
+
+  it('keeps the chunk-by-chunk detail in the console, out of the screen', async () => {
+    const consoleDebug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    const videoKey = 'videos/uuid-456'
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ uploadId: 'upload-123', key: videoKey, original_filename: 'test.mp4' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ PartNumber: 1, ETag: '"abc123"' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ location: null, key: videoKey }),
+      })
+
+    const wrapper = mountModal()
+    const file = createFile('test.mp4', 1024)
+    const input = wrapper.find('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [file] })
+    await input.trigger('change')
+    await wrapper.find('.btn.primary').trigger('click')
+    await new Promise(resolve => setTimeout(resolve, 50))
+
+    expect(wrapper.find('.logs').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Fragmento')
+    expect(
+      consoleDebug.mock.calls.some(([message]) => String(message).includes('Fragmento 1/1')),
+    ).toBe(true)
+    consoleDebug.mockRestore()
   })
 
   it('saves the selected title and description after completing the upload', async () => {

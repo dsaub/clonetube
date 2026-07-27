@@ -186,7 +186,7 @@ src/
 ├── views/
 │   └── DevView.vue            # Sandbox: interfaz de prueba de multipart upload
 └── components/
-    └── UploadModal.vue        # Modal completo de subida: seleccion, progreso, logs, resultado
+    └── UploadModal.vue        # Modal completo de subida: seleccion, progreso, resultado
 ```
 
 ### Analisis por archivo fuente
@@ -232,7 +232,9 @@ Componente modal completo que implementa el flujo multipart upload cliente:
      que lo reenvia a S3. Asi la subida no depende de que el bucket sea accesible
      desde el navegador (era el origen del 404 al subir).
   3. `POST /api/v1/video/complete-multipart` — completa la subida.
-- **UI**: drop zone, barra de progreso, logs en tiempo real, pantalla de exito, pantalla de error.
+- **UI**: drop zone, barra de progreso, mensaje de estado en lenguaje llano, pantalla de exito, pantalla de error.
+- **Trazas**: el detalle tecnico (fragmentos, `uploadId`, `key`, errores) va a `console.debug`/`console.error`
+  con el prefijo `[Clonetube][subida]`; la pantalla nunca lo muestra.
 - Estilos scoped con diseño moderno (modal, overlay con backdrop-blur, gradientes).
 
 ### Dependencias
