@@ -24,5 +24,8 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
+    # --- SQS -------------------------------------
+    QUEUE_URL: str | None = None
+
 
 settings = Settings()

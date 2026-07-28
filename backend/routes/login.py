@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
+from auth.mailing import enviar_message
 
 from auth.dependencies import get_current_user
 from auth.security import (
@@ -11,6 +12,7 @@ from auth.security import (
     hash_password,
     hash_reset_token,
     verify_password,
+    generar_codigo
 )
 from database import get_session
 from models import User
@@ -23,7 +25,7 @@ from pymodels import (
     RegisterRequest,
     ResetPasswordRequest,
     TokenResponse,
-    UserResponse,
+    UserResponse
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
@@ -43,7 +45,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
     },
     status_code=status.HTTP_201_CREATED,
 )
-def register(body: RegisterRequest, session: Session = Depends(get_session)) -> TokenResponse:
+def register(body: RegisterRequest, session: Session = Depends(get_session)):
     password_hash, password_version = hash_password(body.password)
 
     user = User(
@@ -52,6 +54,7 @@ def register(body: RegisterRequest, session: Session = Depends(get_session)) -> 
         password_version=password_version,
         full_name=body.full_name,
         email=body.email,
+        verify_code=generar_codigo()
     )
 
     try:
@@ -65,8 +68,7 @@ def register(body: RegisterRequest, session: Session = Depends(get_session)) -> 
             detail="El nombre de usuario o el email ya están registrados",
         )
 
-    token = create_access_token(user.id, user.password_version)
-    return TokenResponse(access_token=token)
+    return {"status": "PENDING_CONFIRMATION"}
 
 
 @router.post(
@@ -236,3 +238,9 @@ def me(current_user: User = Depends(get_current_user)) -> UserResponse:
         full_name=current_user.full_name,
         email=current_user.email,
     )
+@router.get(
+    "/test_mail"
+)
+def test_mail(email: str) -> dict:
+    result = enviar_message(email, "Email de prueba", "Este es un email de prueba!")
+    return result

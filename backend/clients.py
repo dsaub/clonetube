@@ -19,6 +19,7 @@ def _build_s3_kwargs(endpoint_url: str | None) -> dict:
 
 
 s3_client = boto3.client('s3', **_build_s3_kwargs(settings.S3_ENDPOINT_URL))
+sqs_client = boto3.client('sqs', region_name='eu-west-3')
 
 _public_endpoint = settings.S3_PUBLIC_ENDPOINT_URL or settings.S3_ENDPOINT_URL
 s3_client_public = boto3.client('s3', **_build_s3_kwargs(_public_endpoint))

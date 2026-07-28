@@ -37,6 +37,9 @@ def create_access_token(user_id: uuid.UUID, password_version: int) -> str:
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
+def generar_codigo(n=16):
+    return ''.join(secrets.choice('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(n))
+
 def decode_access_token(token: str) -> dict:
     """Decodifica y valida un JWT. Devuelve el payload o lanza jwt.PyJWTError."""
     return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])

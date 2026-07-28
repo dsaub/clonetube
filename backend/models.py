@@ -14,6 +14,7 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, nullable=False)
     password_reset_token_hash: Optional[str] = Field(default=None, nullable=True)
     password_reset_expires_at: Optional[datetime] = Field(default=None, nullable=True)
+    verify_code: Optional[str] = Field(default=None, nullable=True)
     points: int = Field(default=0)
 
 class UserFollowsUser(SQLModel, table=True):
