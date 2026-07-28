@@ -6,8 +6,7 @@ class TestRegister:
         resp = await client.post("/api/v1/auth/register", json=user_payload)
         assert resp.status_code == 201
         data = resp.json()
-        assert "access_token" in data
-        assert data["token_type"] == "bearer"
+        assert data["status"] == "PENDING_CONFIRMATION"
 
     async def test_register_duplicate_username(self, client, registered_user, user_payload):
         resp = await client.post("/api/v1/auth/register", json=user_payload)
@@ -46,14 +45,6 @@ class TestRegister:
         }
         resp = await client.post("/api/v1/auth/register", json=payload)
         assert resp.status_code == 201
-
-    async def test_register_returns_jwt_with_user_id(self, client, user_payload):
-        resp = await client.post("/api/v1/auth/register", json=user_payload)
-        token = resp.json()["access_token"]
-        import jwt as pyjwt
-        payload = pyjwt.decode(token, options={"verify_signature": False})
-        assert "sub" in payload
-        assert "version" in payload
 
 
 class TestLogin:
