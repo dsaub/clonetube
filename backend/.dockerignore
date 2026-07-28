@@ -4,5 +4,10 @@ __pycache__/
 .git/
 .gitignore
 .env
+.env.example
 .python-version
 README.md
+tests/
+docker-compose.yml
+Dockerfile
+.dockerignore
