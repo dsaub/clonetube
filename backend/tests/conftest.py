@@ -85,6 +85,11 @@ def user_payload() -> dict[str, str]:
 async def registered_user(client: AsyncClient, user_payload: dict[str, str]) -> dict[str, Any]:
     resp = await client.post("/api/v1/auth/register", json=user_payload)
     assert resp.status_code == 201
+    resp = await client.post("/api/v1/auth/login", json={
+        "username": user_payload["username"],
+        "password": user_payload["password"],
+    })
+    assert resp.status_code == 200
     data = resp.json()
     data["password"] = user_payload["password"]
     return data
