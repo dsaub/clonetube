@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 from auth.mailing import enviar_message
-
+from constants import BODY_VERIFICATION_EMAIL
 from auth.dependencies import get_current_user
 from auth.security import (
     create_access_token,
@@ -67,7 +67,7 @@ def register(body: RegisterRequest, session: Session = Depends(get_session)):
             status_code=status.HTTP_409_CONFLICT,
             detail="El nombre de usuario o el email ya están registrados",
         )
-
+    enviar_message(body.email, "Verificación de cuenta", BODY_VERIFICATION_EMAIL.format(user.verify_code))
     return {"status": "PENDING_CONFIRMATION"}
 
 
