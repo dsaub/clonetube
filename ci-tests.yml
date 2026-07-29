@@ -1,0 +1,69 @@
+name: CI Tests
+
+on:
+  push:
+    branches-ignore: [latest]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        working-directory: backend
+        run: uv sync --group dev
+
+      - name: Run tests
+        working-directory: backend
+        run: uv run pytest --junitxml=test-results.xml --tb=short -v
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Backend Tests
+          path: backend/test-results.xml
+          reporter: java-junit
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        working-directory: frontend
+        run: pnpm vitest run --reporter=junit --outputFile=test-results.xml
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Frontend Tests
+          path: frontend/test-results.xml
+          reporter: java-junit

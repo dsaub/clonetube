@@ -15,6 +15,11 @@ SECOND_USER = {
 async def _register(client: AsyncClient, payload: dict[str, str]) -> dict[str, str]:
     response = await client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 201
+    response = await client.post("/api/v1/auth/login", json={
+        "username": payload["username"],
+        "password": payload["password"],
+    })
+    assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
