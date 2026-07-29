@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 from auth.mailing import enviar_message
 from constants import BODY_VERIFICATION_EMAIL
 from auth.dependencies import get_current_user
+from fastapi.responses import RedirectResponse
 from auth.security import (
     create_access_token,
     create_reset_token,
@@ -244,3 +245,17 @@ def me(current_user: User = Depends(get_current_user)) -> UserResponse:
 def test_mail(email: str) -> dict:
     result = enviar_message(email, "Email de prueba", "Este es un email de prueba!")
     return result
+
+@router.get((
+    "/verify/{code}"
+))
+def verify(code: str, session: Session = Depends(get_session)):
+    result: User | None = session.exec(select(User).where(User.verify_code == code).limit(1)).first()
+    if result is not None:
+        result.verify_code = None
+        session.add(result)
+        session.commit()
+
+    
+
+    return RedirectResponse("/")
