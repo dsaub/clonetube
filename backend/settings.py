@@ -9,9 +9,9 @@ class Settings(BaseSettings):
     )
 
     # ─── AWS / MinIO (S3-compatible) ─────────────
-    AWS_ACCESS_KEY_ID: str = ""
-    AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_REGION: str = "us-east-1"
+    MINIO_ROOT_USER: str = ""
+    MINIO_ROOT_PASSWORD: str = ""
+    AWS_REGION: str = "eu-west-3"
     AWS_BUCKET_NAME: str = "clonetube"
     S3_ENDPOINT_URL: str | None = None
     S3_PUBLIC_ENDPOINT_URL: str | None = None

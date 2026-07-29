@@ -49,11 +49,12 @@ services:
   backend:
     image: ghcr.io/dsaub/clonetube-backend:latest
     environment:
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-clonetube}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+      QUEUE_URL: ${QUEUE_URL}
       # Opcional: el navegador ya no habla con MinIO. Los fragmentos van por
       # /api/v1/video/upload-chunk y el vídeo se sirve por /api/v1/video/stream,
       # así que MinIO puede quedarse en la red interna. Definir esta variable

@@ -9,8 +9,8 @@ _s3_config = BotoConfig(signature_version='s3v4')
 def _build_s3_kwargs(endpoint_url: str | None) -> dict:
     kwargs = {
         'region_name': settings.AWS_REGION,
-        'aws_access_key_id': settings.AWS_ACCESS_KEY_ID,
-        'aws_secret_access_key': settings.AWS_SECRET_ACCESS_KEY,
+        'aws_access_key_id': settings.MINIO_ROOT_USER,
+        'aws_secret_access_key': settings.MINIO_ROOT_PASSWORD,
         'config': _s3_config,
     }
     if endpoint_url is not None:
