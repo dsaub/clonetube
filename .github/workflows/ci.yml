@@ -76,7 +76,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        service: [backend, frontend]
+        service: [backend, frontend, worker]
 
     steps:
       - name: Checkout code
