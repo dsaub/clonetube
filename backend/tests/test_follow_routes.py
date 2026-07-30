@@ -4,6 +4,8 @@ from typing import Any
 
 from httpx import AsyncClient
 
+from tests.conftest import verify_user
+
 SECOND_USER = {
     "username": "creator",
     "password": "Str0ng!Pass",
@@ -15,6 +17,7 @@ SECOND_USER = {
 async def _register(client: AsyncClient, payload: dict[str, str]) -> dict[str, str]:
     response = await client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 201
+    await verify_user(client, payload["username"])
     response = await client.post("/api/v1/auth/login", json={
         "username": payload["username"],
         "password": payload["password"],

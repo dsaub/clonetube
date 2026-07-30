@@ -94,6 +94,12 @@ def login(body: LoginRequest, session: Session = Depends(get_session)) -> TokenR
             detail="Credenciales inválidas",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if user.verify_code is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El usuario no esta verificado",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
 
     token = create_access_token(user.id, user.password_version)
     return TokenResponse(access_token=token)

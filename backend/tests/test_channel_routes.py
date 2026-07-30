@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from sqlmodel import Session
 
 from models import User, Video
+from tests.conftest import verify_user
 
 
 @pytest.fixture
@@ -24,6 +25,7 @@ def creator(user_payload: dict[str, str]) -> dict[str, str]:
 async def _register(client: AsyncClient, payload: dict[str, str]) -> dict[str, str]:
     response = await client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 201
+    await verify_user(client, payload["username"])
     response = await client.post("/api/v1/auth/login", json={
         "username": payload["username"],
         "password": payload["password"],

@@ -1,5 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+import appsignal
+
+appsignal.start()
 
 from routes.login import router as auth_router
 from routes.social import router as social_router
@@ -28,6 +32,8 @@ app.include_router(auth_router)
 app.include_router(social_router)
 app.include_router(video_router)
 app.include_router(points_router)
+
+FastAPIInstrumentor().instrument_app(app)
 
 if __name__ == "__main__":
     import uvicorn

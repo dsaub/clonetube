@@ -58,6 +58,16 @@ class TestLogin:
         assert "access_token" in data
         assert data["token_type"] == "bearer"
 
+    async def test_login_unverified_user(self, client, user_payload):
+        resp = await client.post("/api/v1/auth/register", json=user_payload)
+        assert resp.status_code == 201
+        resp = await client.post("/api/v1/auth/login", json={
+            "username": user_payload["username"],
+            "password": user_payload["password"],
+        })
+        assert resp.status_code == 401
+        assert "no esta verificado" in resp.json()["detail"]
+
     async def test_login_wrong_password(self, client, registered_user, user_payload):
         resp = await client.post("/api/v1/auth/login", json={
             "username": user_payload["username"],

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from database import get_session
 from main import app as _app
@@ -81,10 +81,22 @@ def user_payload() -> dict[str, str]:
     return dict(_USER_PAYLOAD)
 
 
+async def verify_user(client: AsyncClient, username: str) -> None:
+    """Marca al usuario como verificado usando el mismo flujo que el email."""
+    with Session(_engine) as session:
+        user = session.exec(select(User).where(User.username == username)).first()
+        assert user is not None
+        code = user.verify_code
+    assert code is not None
+    resp = await client.get(f"/api/v1/auth/verify/{code}", follow_redirects=False)
+    assert resp.status_code in (200, 307)
+
+
 @pytest.fixture
 async def registered_user(client: AsyncClient, user_payload: dict[str, str]) -> dict[str, Any]:
     resp = await client.post("/api/v1/auth/register", json=user_payload)
     assert resp.status_code == 201
+    await verify_user(client, user_payload["username"])
     resp = await client.post("/api/v1/auth/login", json={
         "username": user_payload["username"],
         "password": user_payload["password"],

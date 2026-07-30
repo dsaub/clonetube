@@ -65,6 +65,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-cambiar-por-clave-segura-de-al-menos-32-byts}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+      APPSIGNAL_PUSH_API_KEY: ${APPSIGNAL_PUSH_API_KEY}
     depends_on:
       mariadb:
         condition: service_healthy
