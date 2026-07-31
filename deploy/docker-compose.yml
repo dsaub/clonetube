@@ -4,7 +4,7 @@ services:
     environment:
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-clonetube}
-      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
       QUEUE_URL: ${QUEUE_URL}
       # Opcional: el navegador ya no habla con MinIO. Los fragmentos van por
       # /api/v1/video/upload-chunk y el vídeo se sirve por /api/v1/video/stream,
