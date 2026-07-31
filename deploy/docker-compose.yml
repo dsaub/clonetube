@@ -49,6 +49,3 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-volumes:
-  mariadb_data:
-  minio_data:
