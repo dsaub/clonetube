@@ -14,7 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import me.elordenador.clonetube.model.Video
+import me.elordenador.clonetube.model.VideoItem
 import me.elordenador.clonetube.ui.components.Avatar
 import me.elordenador.clonetube.ui.components.VideoCover
 import me.elordenador.clonetube.ui.state.ClonetubeAppState
@@ -24,7 +24,7 @@ import me.elordenador.clonetube.ui.theme.TextColor
 
 @Composable
 fun HomeTab(state: ClonetubeAppState) {
-    val videos = state.homeVideos
+    val videos = state.homeFeed
     if (videos.isEmpty()) {
         Text(
             text = "No hay coincidencias para «${state.searchQuery}».",
@@ -43,7 +43,7 @@ fun HomeTab(state: ClonetubeAppState) {
 }
 
 @Composable
-private fun FeedCard(video: Video, onClick: () -> Unit) {
+private fun FeedCard(video: VideoItem, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()

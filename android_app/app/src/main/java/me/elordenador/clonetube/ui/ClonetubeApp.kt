@@ -3,6 +3,7 @@ package me.elordenador.clonetube.ui
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,7 +29,14 @@ import me.elordenador.clonetube.ui.theme.TextColor
  * tabbed main screen or one of the full-screen overlays is showing.
  */
 @Composable
-fun ClonetubeApp(state: ClonetubeAppState = rememberClonetubeAppState()) {
+fun ClonetubeApp(
+    state: ClonetubeAppState = rememberClonetubeAppState(),
+    verifyCode: String? = null,
+) {
+    LaunchedEffect(verifyCode) {
+        if (verifyCode != null) state.startVerification(verifyCode)
+    }
+
     // System back closes an overlay, mirroring its close button. The null check keeps
     // @Preview working, since previews provide no OnBackPressedDispatcherOwner.
     if (LocalOnBackPressedDispatcherOwner.current != null) {

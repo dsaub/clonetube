@@ -31,6 +31,7 @@ import me.elordenador.clonetube.ui.components.IconButtonBox
 import me.elordenador.clonetube.ui.components.IconMore
 import me.elordenador.clonetube.ui.components.VideoRow
 import me.elordenador.clonetube.ui.state.ClonetubeAppState
+import me.elordenador.clonetube.ui.state.formatFollowers
 import me.elordenador.clonetube.ui.theme.Accent100
 import me.elordenador.clonetube.ui.theme.Accent800
 import me.elordenador.clonetube.ui.theme.Bg
@@ -42,7 +43,7 @@ import me.elordenador.clonetube.ui.theme.coverBrush
 
 @Composable
 fun ChannelScreen(state: ClonetubeAppState) {
-    val info = state.channelInfo
+    val info = state.channelInfo ?: return
     val subscribed = state.isSubscribed(info.handle)
 
     Column(Modifier.fillMaxSize()) {
@@ -110,7 +111,7 @@ fun ChannelScreen(state: ClonetubeAppState) {
                     modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
                 )
                 Text(
-                    text = "@${info.handle} · ${info.videoCount} videos · ${info.subCount} seguidores",
+                    text = "@${info.handle} · ${info.videoCount} videos · ${formatFollowers(info.subCount)} seguidores",
                     color = Neutral500,
                     fontSize = 12.sp,
                 )
@@ -148,7 +149,7 @@ fun ChannelScreen(state: ClonetubeAppState) {
                 state.channelVideos.forEach { video ->
                     VideoRow(
                         video = video,
-                        meta = "${video.date} · ${video.duration}",
+                        meta = "${video.date}${video.duration?.let { " · $it" } ?: ""}",
                         thumbWidth = 120.dp,
                         onClick = { state.openWatch(video.id) },
                         modifier = Modifier.fillMaxWidth(),
