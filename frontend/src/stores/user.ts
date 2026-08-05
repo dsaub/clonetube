@@ -26,9 +26,9 @@ export const useUserStore = defineStore('user', () => {
         await finishAuthentication(response.data);
     }
 
-    async function register(payload: RegisterPayload) {
-        const response = await axios.post<Token>("/api/v1/auth/register", payload);
-        await finishAuthentication(response.data);
+    async function register(payload: RegisterPayload): Promise<{ status: string }> {
+        const response = await axios.post<{ status: string }>("/api/v1/auth/register", payload);
+        return response.data;
     }
 
     async function finishAuthentication(authToken: Token) {

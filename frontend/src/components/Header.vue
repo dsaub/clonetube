@@ -16,6 +16,8 @@ const closing = ref(false);
 const switching = ref(false);
 const loading = ref(false);
 const authError = ref('');
+const registeredEmail = ref('');
+const registeredUsername = ref('');
 
 const loginUsername = ref('');
 const loginPassword = ref('');
@@ -71,6 +73,8 @@ function openAuth(mode: AuthMode) {
 
   authMode.value = mode;
   authError.value = '';
+  registeredEmail.value = '';
+  registeredUsername.value = '';
   closing.value = false;
   authVisible.value = true;
   focusCurrentForm();
@@ -139,13 +143,16 @@ async function submitRegister() {
   loading.value = true;
   authError.value = '';
   try {
-    await user.register({
+    const result = await user.register({
       username: registerUsername.value,
       password: registerPassword.value,
       full_name: fullName.value,
       email: email.value,
     });
-    closeAuth();
+    if (result.status === 'pending_verification') {
+      registeredEmail.value = email.value;
+      registeredUsername.value = registerUsername.value;
+    }
   } catch (error: unknown) {
     authError.value = axios.isAxiosError(error) && error.response?.status === 409
       ? 'Ese usuario o correo electrónico ya está registrado.'
@@ -223,7 +230,22 @@ onBeforeUnmount(() => {
     @close="finishClose"
   >
         <div class="auth-content" :class="{ 'signal-lost': switching }">
-          <template v-if="authMode === 'login'">
+          <template v-if="registeredEmail">
+            <div class="panel-heading">
+              <span class="signal-label">CH 03 · VERIFICACIÓN</span>
+              <h1 id="register-title">Revisa tu correo</h1>
+              <p>
+                Hemos enviado un enlace de verificación a
+                <strong class="verify-email">{{ registeredEmail }}</strong>.
+                Ábrelo para activar la cuenta @{{ registeredUsername }}.
+              </p>
+            </div>
+            <p class="mode-switch">
+              <button type="button" @click="closeAuth">Entendido</button>
+            </p>
+          </template>
+
+          <template v-else-if="authMode === 'login'">
             <div class="panel-heading">
               <span class="signal-label">CH 01 · LOGIN</span>
               <h1 id="login-title">Bienvenido de nuevo</h1>
@@ -717,6 +739,11 @@ onBeforeUnmount(() => {
   color: #b1adff;
   text-decoration: underline;
   text-underline-offset: 0.18rem;
+}
+
+.verify-email {
+  color: #bdb9ff;
+  font-weight: 750;
 }
 
 @keyframes signal-loss {

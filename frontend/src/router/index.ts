@@ -25,6 +25,11 @@ const router = createRouter({
       component: () => import('@/views/ChannelView.vue'),
     },
     {
+      path: '/verify/:code',
+      name: 'verify',
+      component: () => import('@/views/VerifyView.vue'),
+    },
+    {
       path: '/',
       name: 'index',
       component: () => import('@/views/IndexView.vue'),
