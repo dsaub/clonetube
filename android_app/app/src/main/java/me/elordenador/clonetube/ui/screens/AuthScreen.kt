@@ -11,6 +11,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +57,18 @@ fun AuthScreen(state: ClonetubeAppState) {
                 modifier = Modifier.padding(bottom = 6.dp),
             )
 
+            state.verifyNotice?.let { notice ->
+                Text(
+                    text = notice,
+                    color = Accent300,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                )
+            }
+
             when (state.authMode) {
                 AuthMode.LOGIN -> LoginForm(state)
                 AuthMode.REGISTER -> RegisterForm(state)
@@ -81,12 +95,20 @@ private fun LoginForm(state: ClonetubeAppState) {
         modifier = Modifier.padding(bottom = 20.dp),
     )
     PrimaryButton(
-        label = "Iniciar sesión",
+        label = if (state.authLoading) "Cargando…" else "Iniciar sesión",
         onClick = state::submitAuth,
-        enabled = state.loginEnabled,
+        enabled = state.loginEnabled && !state.authLoading,
         modifier = Modifier.fillMaxWidth(),
         height = 46.dp,
     )
+    state.authError?.let { error ->
+        Text(
+            text = error,
+            color = Neutral400,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
     SwitchModePrompt(
         question = "¿Todavía no tienes cuenta?",
         action = "Regístrate",
@@ -125,12 +147,20 @@ private fun RegisterForm(state: ClonetubeAppState) {
         modifier = Modifier.padding(bottom = 20.dp),
     )
     PrimaryButton(
-        label = "Registrarse",
+        label = if (state.authLoading) "Cargando…" else "Registrarse",
         onClick = state::submitAuth,
-        enabled = state.registerEnabled,
+        enabled = state.registerEnabled && !state.authLoading,
         modifier = Modifier.fillMaxWidth(),
         height = 46.dp,
     )
+    state.authError?.let { error ->
+        Text(
+            text = error,
+            color = Neutral400,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
     SwitchModePrompt(
         question = "¿Ya tienes una cuenta?",
         action = "Inicia sesión",

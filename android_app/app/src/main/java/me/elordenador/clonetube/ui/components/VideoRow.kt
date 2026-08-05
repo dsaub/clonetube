@@ -14,7 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import me.elordenador.clonetube.model.Video
+import me.elordenador.clonetube.model.VideoItem
 import me.elordenador.clonetube.ui.theme.Neutral500
 import me.elordenador.clonetube.ui.theme.RADIUS_SM
 import me.elordenador.clonetube.ui.theme.TextColor
@@ -26,7 +26,7 @@ import me.elordenador.clonetube.ui.theme.TextColor
  */
 @Composable
 fun VideoRow(
-    video: Video,
+    video: VideoItem,
     meta: String,
     thumbWidth: Dp,
     onClick: () -> Unit,

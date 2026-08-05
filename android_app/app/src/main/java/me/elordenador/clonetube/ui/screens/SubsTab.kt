@@ -56,9 +56,9 @@ fun SubsTab(state: ClonetubeAppState) {
     SolidDivider()
 
     state.subsVideos.forEach { video ->
-        VideoRow(
+                VideoRow(
             video = video,
-            meta = "${video.author} · ${video.date}",
+            meta = video.date,
             thumbWidth = 130.dp,
             onClick = { state.openWatch(video.id) },
             verticalPadding = 10.dp,

@@ -1,5 +1,10 @@
 package me.elordenador.clonetube.ui.screens
 
+import android.content.ContentValues
+import android.net.Uri
+import android.provider.MediaStore
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,15 +22,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 import me.elordenador.clonetube.ui.components.IconButtonBox
 import me.elordenador.clonetube.ui.components.IconBlockButton
 import me.elordenador.clonetube.ui.components.IconCamera
@@ -37,7 +45,6 @@ import me.elordenador.clonetube.ui.components.PrimaryButton
 import me.elordenador.clonetube.ui.components.SecondaryButton
 import me.elordenador.clonetube.ui.components.SolidDivider
 import me.elordenador.clonetube.ui.state.ClonetubeAppState
-import me.elordenador.clonetube.ui.state.UPLOAD_TICK_MILLIS
 import me.elordenador.clonetube.ui.state.UploadStep
 import me.elordenador.clonetube.ui.theme.Accent
 import me.elordenador.clonetube.ui.theme.Accent100
@@ -51,14 +58,16 @@ import me.elordenador.clonetube.ui.theme.TextColor
 
 @Composable
 fun UploadScreen(state: ClonetubeAppState) {
-    // Drives the simulated upload, replacing the prototype's setInterval.
-    LaunchedEffect(state.uploadStep) {
-        if (state.uploadStep != UploadStep.UPLOADING) return@LaunchedEffect
-        while (state.uploadStep == UploadStep.UPLOADING) {
-            delay(UPLOAD_TICK_MILLIS)
-            state.advanceUpload()
-        }
-    }
+    val context = LocalContext.current
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> uri?.let { state.pickVideo(it, nameFromUri(context, it)) } }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CaptureVideo(),
+    ) { ok -> if (ok) cameraUri?.let { state.pickVideo(it, nameFromUri(context, it)) } }
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -81,7 +90,14 @@ fun UploadScreen(state: ClonetubeAppState) {
                 .padding(16.dp),
         ) {
             when (state.uploadStep) {
-                UploadStep.IDLE -> SourcePicker(state)
+                UploadStep.IDLE -> SourcePicker(
+                    onGallery = { galleryLauncher.launch(null) },
+                    onCamera = {
+                        val uri = createVideoUri(context)
+                        cameraUri = uri
+                        cameraLauncher.launch(uri)
+                    },
+                )
                 UploadStep.PICKED -> DetailsForm(state)
                 UploadStep.UPLOADING -> Progress(state)
                 UploadStep.DONE -> Done(state)
@@ -91,16 +107,16 @@ fun UploadScreen(state: ClonetubeAppState) {
 }
 
 @Composable
-private fun SourcePicker(state: ClonetubeAppState) {
+private fun SourcePicker(onGallery: () -> Unit, onCamera: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         IconBlockButton(
             label = "Elegir de la galería",
-            onClick = state::pickFromGallery,
+            onClick = onGallery,
             icon = { IconGallery(TextColor) },
         )
         IconBlockButton(
             label = "Grabar con la cámara",
-            onClick = state::pickFromCamera,
+            onClick = onCamera,
             icon = { IconCamera(TextColor) },
         )
     }
@@ -137,11 +153,19 @@ private fun DetailsForm(state: ClonetubeAppState) {
         modifier = Modifier.padding(bottom = 16.dp),
     )
     PrimaryButton(
-        label = "Subir video",
+        label = if (state.uploadError != null) "Reintentar" else "Subir video",
         onClick = state::startUpload,
         modifier = Modifier.fillMaxWidth(),
         height = 46.dp,
     )
+    state.uploadError?.let { error ->
+        Text(
+            text = error,
+            color = Neutral400,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 10.dp),
+        )
+    }
 }
 
 @Composable
@@ -158,7 +182,7 @@ private fun Progress(state: ClonetubeAppState) {
                 Modifier
                     .fillMaxWidth(state.uploadProgress / 100f)
                     .fillMaxHeight()
-                    .background(Accent)
+                    .background(Accent),
             )
         }
         Row(
@@ -207,4 +231,23 @@ private fun Done(state: ClonetubeAppState) {
         )
         SecondaryButton("Subir otro", onClick = state::resetUpload)
     }
+}
+
+private fun nameFromUri(context: android.content.Context, uri: Uri): String {
+    val projection = arrayOf(MediaStore.Video.Media.DISPLAY_NAME)
+    context.contentResolver.query(uri, projection, null, null, null)?.use { c ->
+        if (c.moveToFirst()) {
+            val idx = c.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME)
+            if (idx >= 0) return c.getString(idx)
+        }
+    }
+    return uri.lastPathSegment ?: "video.mp4"
+}
+
+private fun createVideoUri(context: android.content.Context): Uri {
+    val values = ContentValues().apply {
+        put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+    }
+    return context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+        ?: Uri.parse("")
 }

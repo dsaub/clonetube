@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,10 +28,10 @@ import androidx.compose.ui.unit.sp
 import me.elordenador.clonetube.ui.components.Avatar
 import me.elordenador.clonetube.ui.components.IconBack
 import me.elordenador.clonetube.ui.components.IconButtonBox
-import me.elordenador.clonetube.ui.components.IconPlay
 import me.elordenador.clonetube.ui.components.PrimaryButton
 import me.elordenador.clonetube.ui.components.SecondaryButton
 import me.elordenador.clonetube.ui.components.SolidDivider
+import me.elordenador.clonetube.ui.components.VideoPlayer
 import me.elordenador.clonetube.ui.components.VideoRow
 import me.elordenador.clonetube.ui.state.ClonetubeAppState
 import me.elordenador.clonetube.ui.theme.Accent
@@ -47,7 +45,7 @@ import me.elordenador.clonetube.ui.theme.coverBrush
 
 @Composable
 fun WatchScreen(state: ClonetubeAppState) {
-    val video = state.watchVideo
+    val video = state.watchItem ?: return
     val subscribed = state.isSubscribed(video.handle)
 
     Column(Modifier.fillMaxSize()) {
@@ -68,7 +66,26 @@ fun WatchScreen(state: ClonetubeAppState) {
             )
         }
 
-        MockPlayer(video.coverIndex)
+        val streamUrl = state.watchStreamUrl
+        if (streamUrl != null) {
+            VideoPlayer(url = streamUrl)
+        } else {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(Accent),
+            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(coverBrush(video.coverIndex))
+                    .height(120.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Cargando vídeo…", color = Neutral300, fontSize = 13.sp)
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -85,8 +102,9 @@ fun WatchScreen(state: ClonetubeAppState) {
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
+            val sub = video.duration?.let { " · $it" } ?: ""
             Text(
-                text = "${video.date} · ${video.duration}",
+                text = "${video.date}$sub",
                 color = Neutral400,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(bottom = 14.dp),
@@ -110,7 +128,7 @@ fun WatchScreen(state: ClonetubeAppState) {
                     Avatar(video.initial, 38.dp, 15.sp)
                     Column {
                         Text(
-                            text = video.author,
+                            text = video.author.ifBlank { video.handle },
                             color = TextColor,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -124,13 +142,15 @@ fun WatchScreen(state: ClonetubeAppState) {
             }
             SolidDivider()
 
-            Text(
-                text = video.description,
-                color = Neutral300,
-                fontSize = 13.sp,
-                lineHeight = 21.sp,
-                modifier = Modifier.padding(top = 14.dp),
-            )
+            if (video.description.isNotBlank()) {
+                Text(
+                    text = video.description,
+                    color = Neutral300,
+                    fontSize = 13.sp,
+                    lineHeight = 21.sp,
+                    modifier = Modifier.padding(top = 14.dp),
+                )
+            }
 
             Text(
                 text = "MÁS VIDEOS",
@@ -141,51 +161,15 @@ fun WatchScreen(state: ClonetubeAppState) {
                 modifier = Modifier.padding(top = 20.dp, bottom = 10.dp),
             )
             state.otherVideos.forEach { other ->
+                val otherSub = other.duration?.let { " · $it" } ?: ""
                 VideoRow(
                     video = other,
-                    meta = "${other.author} · ${other.duration}",
+                    meta = "${other.author.ifBlank { other.handle }}$otherSub",
                     thumbWidth = 108.dp,
                     onClick = { state.openWatch(other.id) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-        }
-    }
-}
-
-/** Static stand-in for the player: cover art, a play badge and a scrub line. */
-@Composable
-private fun MockPlayer(coverIndex: Int) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(16f / 9f)
-            .background(coverBrush(coverIndex)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(CoverScrim.copy(alpha = 0.55f))
-                .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            IconPlay(size = 22.dp)
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .height(3.dp)
-                .background(Color.White.copy(alpha = 0.18f)),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth(0.38f)
-                    .fillMaxHeight()
-                    .background(Accent)
-            )
         }
     }
 }
