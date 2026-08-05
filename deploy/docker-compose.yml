@@ -2,20 +2,21 @@ services:
   backend:
     image: ghcr.io/dsaub/clonetube-backend:latest
     environment:
-      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION:-eu-west-3}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-clonetube}
-      QUEUE_URL: ${QUEUE_URL}
-      # Opcional: el navegador ya no habla con MinIO. Los fragmentos van por
-      # /api/v1/video/upload-chunk y el vídeo se sirve por /api/v1/video/stream,
-      # así que MinIO puede quedarse en la red interna. Definir esta variable
-      # sólo habilita /sign-chunk (subida directa al bucket) y, si apunta a un
-      # host que el navegador no alcanza, esa ruta devuelve 404.
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      # Opcional. Ni la subida ni la reproducción la necesitan: los fragmentos
+      # y el vídeo van por /api/v1/video/upload-chunk y /api/v1/video/stream.
+      # Sólo afecta a /sign-chunk, que entrega URLs prefirmadas al navegador.
       S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-}
-      DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://clonetube:password@mariadb:3306/clonetube}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:-cambiar-por-clave-segura-de-al-menos-32-byts}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
-      APPSIGNAL_PUSH_API_KEY: ${APPSIGNAL_PUSH_API_KEY}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL:-}
+      DOMAIN: ${DOMAIN}
     restart: unless-stopped
 
   frontend:

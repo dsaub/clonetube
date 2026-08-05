@@ -11,29 +11,41 @@ permissions:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: clonetube
+        ports:
+          - 3306:3306
+    env:
+      SPRING_DATASOURCE_URL: jdbc:mariadb://localhost:3306/clonetube
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
-          python-version: "3.14"
-
-      - name: Install dependencies
-        working-directory: backend
-        run: uv sync --group dev
+          distribution: temurin
+          java-version: "25"
+          cache: maven
 
       - name: Run tests
         working-directory: backend
-        run: uv run pytest --junitxml=test-results.xml --tb=short -v
+        run: ./mvnw -B test
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
         if: always()
         with:
           name: Backend Tests
-          path: backend/test-results.xml
+          path: backend/target/surefire-reports/*.xml
           reporter: java-junit
 
   frontend-tests:

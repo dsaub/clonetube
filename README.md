@@ -7,7 +7,7 @@ Clon de YouTube construido con **Vue 3 + FastAPI**. Subida de videos con multipa
 | Capa | Tecnologia |
 |---|---|
 | Frontend | Vue 3, TypeScript, Vite, Pinia, Vue Router |
-| Backend | FastAPI, Python 3.14, boto3, SQLModel |
+| Backend | Springboot 4.0.5 |
 | Almacenamiento | MinIO (S3-compatible) |
 | Base de datos | MariaDB 11 |
 | Proxy | nginx (HTTPS con SSL termination) |

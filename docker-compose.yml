@@ -59,10 +59,12 @@ services:
       # y el vídeo van por /api/v1/video/upload-chunk y /api/v1/video/stream.
       # Sólo afecta a /sign-chunk, que entrega URLs prefirmadas al navegador.
       S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-http://localhost:9000}
-      DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://clonetube:password@mariadb:3306/clonetube}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mariadb://mariadb:3306/clonetube}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-clonetube}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-password}
       JWT_SECRET: ${JWT_SECRET:-cambiar-por-clave-segura-de-al-menos-32-byts}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL:-}
+      DOMAIN: ${DOMAIN:-http://localhost}
     depends_on:
       mariadb:
         condition: service_healthy

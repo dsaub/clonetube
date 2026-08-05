@@ -10,60 +10,61 @@
 clonetube/
 ├── .github/
 │   └── workflows/
-│       └── docker-build.yml     # CI/CD: build y push de imagenes Docker
-├── backend/                     # API REST con FastAPI (Python 3.14+)
-│   ├── main.py                  # FastAPI + CORS + lifespan (crea tablas startup)
-│   ├── settings.py              # Pydantic Settings (AWS, DB, JWT)
-│   ├── database.py              # Engine SQLModel + get_session dependency
-│   ├── models.py                # SQLModel: User, Video, UserLikesVideo
-│   ├── clients.py               # Cliente S3 (boto3) con endpoint_URL custom
-│   ├── pymodels.py              # Modelos Pydantic (multipart upload, auth, listado, streaming)
-│   ├── video_processor.py       # Transcodificacion con ffmpeg (MP4/H.264/AAC)
-│   ├── auth/
-│   │   ├── security.py          # Hash bcrypt + JWT + reset token (create/decode, password_version)
-│   │   ├── schemas.py           # Pydantic: RegisterRequest, LoginRequest, TokenResponse, etc.
-│   │   └── dependencies.py      # get_current_user (valida JWT + password_version)
-│   ├── routes/
-│   │   ├── login.py             # /api/v1/auth (register, login, change-password, forgot-password, reset-password, me)
-│   │   ├── video.py             # Endpoints multipart upload + list + stream + transcoding
-│   │   └── auth.py             # Antiguo router de auth (reemplazado por login.py)
-│   ├── alembic/                 # Migraciones con Alembic
-│   │   ├── env.py               # Usa settings.DATABASE_URL + SQLModel metadata
-│   │   ├── script.py.mako
-│   │   └── versions/            # Migraciones generadas
-│   ├── alembic.ini
-│   ├── entrypoint.sh            # Ejecuta `alembic upgrade head` + CMD
-│   ├── Dockerfile               # Python Alpine + ffmpeg + entrypoint (usuario no root)
-│   ├── pyproject.toml
-│   ├── uv.lock
-│   ├── .env.example
-│   └── .python-version
-├── frontend/                    # SPA con Vue 3 + TypeScript + Vite
+│       ├── ci.yml              # Push a `latest`: tests + build/push imagenes ghcr.io
+│       └── ci-tests.yml        # Resto de branches: solo tests (backend + frontend)
+├── backend/                    # API REST con Spring Boot 4.0.7 (Java 25, Maven)
+│   ├── pom.xml                 # Spring Boot 4.0.7, AWS SDK v2 (BOM), Flyway, springdoc
+│   ├── mvnw / mvnw.cmd         # Maven wrapper
+│   ├── Dockerfile              # Build maven:eclipse-temurin-25 + runtime temurin JRE
+│   ├── src/main/java/me/elordenador/clonetube/
+│   │   ├── ClonetubeApplication.java
+│   │   ├── controller/         # Auth, Video, User, Points, Health
+│   │   ├── service/            # AuthService, VideoService, UserService, PointsService
+│   │   ├── repository/         # UserRepository (Spring Data JPA)
+│   │   ├── models/             # Entidades JPA: User, Video, MultipartUpload, etc.
+│   │   ├── dtos/               # DTOs de request/response
+│   │   ├── config/             # SecurityConfig, JwtConfig, SqsConfig
+│   │   ├── security/           # UserJwtAuthenticationConverter
+│   │   ├── decorators/         # @RequireAuth, @RequireAdmin
+│   │   ├── exceptions/         # ResourceNotFoundException
+│   │   └── enums/              # VisibilityEnum
+│   ├── src/main/resources/
+│   │   ├── application.properties
+│   │   └── db/migration/V1__initial_version.sql   # Esquema via Flyway
+│   └── src/test/               # Tests: H2 en memoria (application-test.properties)
+├── backend.old/                # Backend Python/FastAPI LEGACY (no se usa)
+├── frontend/                   # SPA con Vue 3 + TypeScript + Vite (pnpm)
 │   ├── src/
-│   │   ├── App.vue              # Componente raiz con <RouterView />
-│   │   ├── main.ts              # Bootstrap: Pinia + Router
-│   │   ├── router/index.ts      # Rutas (lazy loading)
-│   │   ├── stores/counter.ts    # Store de ejemplo (Pinia)
-│   │   ├── views/
-│   │   │   └── DevView.vue      # Sandbox de desarrollo (multipart upload)
-│   │   └── components/
-│   │       └── UploadModal.vue   # Modal de subida por fragmentos
-│   ├── Dockerfile               # Imagen Node multi-stage + Caddy distroless
-│   ├── index.html
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
-│   └── env.d.ts
-├── docker-compose.yml           # Stack desarrollo (MariaDB, MinIO, backend, frontend, nginx)
-├── deploy/                        # Configuraciones de despliegue
-│   ├── docker-compose.yml       # Stack produccion (imagenes ghcr.io pre-built)
-│   ├── nginx.conf               # Reverse proxy HTTPS con SSL termination
-│   ├── generate-certs.sh        # Generador de certificados autofirmados
-│   └── .gitignore               # Excluye certs/ y .env
+│   │   ├── App.vue / main.ts / styles.css / types.ts
+│   │   ├── router/index.ts     # /, /watch, /studio, /channel/:handle, /dev
+│   │   ├── stores/user.ts      # Store real de auth (Pinia)
+│   │   ├── composables/        # useTvSignOut.ts
+│   │   ├── api/                # channel.ts, feed.ts, social.ts, video.ts
+│   │   ├── views/              # IndexView, WatchView, StudioView, ChannelView, DevView
+│   │   ├── components/         # Header, VideoPlayer, FollowButton, UploadModal, Tv*
+│   │   └── __tests__/          # Vitest + Vue Test Utils + jsdom
+│   └── Dockerfile              # Node build multi-stage + Caddy distroless
+├── worker/                     # Worker Python: consume SQS y envia emails SMTP
+│   ├── main.py                 # Polling SQS + signal handling
+│   ├── mailer.py               # Envio via smtplib
+│   ├── models.py               # EmailMessage (Pydantic)
+│   ├── clients.py              # Cliente SQS (boto3)
+│   ├── settings.py             # Pydantic Settings
+│   └── Dockerfile
+├── android_app/                # App Android (Kotlin + Jetpack Compose)
+│   └── app/src/main/java/me/elordenador/clonetube/
+│       ├── MainActivity.kt
+│       ├── model/Video.kt
+│       └── ui/                 # ClonetubeApp, screens (Auth, Channel, Home), components
+├── docker-compose.yml          # Stack desarrollo (MariaDB, MinIO, backend, frontend, nginx)
+├── deploy/                     # Despliegue en produccion
+│   ├── docker-compose.yml      # Stack prod (imagenes ghcr.io + worker)
+│   ├── nginx.conf              # Reverse proxy HTTPS con SSL termination
+│   └── generate-certs.sh       # Certificados autofirmados
 └── AGENTS.md
 ```
 
-El proyecto **clonetube** es un clon de YouTube. Tiene separacion clara entre frontend y backend. La carpeta `deploy/` contiene la configuracion de despliegue en produccion con Docker Compose (MariaDB, MinIO, nginx con HTTPS), y `docker-compose.yml` en la raiz para desarrollo. CI/CD configurado con GitHub Actions.
+El proyecto **clonetube** es un clon de YouTube: frontend web (Vue 3), API (Spring Boot), app Android (Compose), un worker de emails (Python/SQS) y despliegue con Docker Compose + nginx HTTPS. `backend.old/` es el backend Python legado, sin uso.
 
 ---
 
@@ -71,111 +72,123 @@ El proyecto **clonetube** es un clon de YouTube. Tiene separacion clara entre fr
 
 ### Descripcion general
 
-API REST construida con **FastAPI** sobre **Python 3.14+**. Usa `uv` como gestor de paquetes. El backend expone endpoints para subida de videos mediante **multipart upload** a S3 (compatible con AWS S3 y MinIO), autenticacion JWT, y persistencia en MariaDB mediante SQLModel + Alembic.
+API REST con **Spring Boot 4.0.7** sobre **Java 25**, gestionada con **Maven**. Persistencia con **Spring Data JPA + Flyway** sobre MariaDB/MySQL. Seguridad JWT con Spring Security OAuth2 Resource Server (HS256). Almacenamiento de videos en **S3** (MinIO local o AWS) con multipart upload. Documentacion OpenAPI con springdoc (`/docs`, `/openapi.json`).
 
-### Archivos
+### Archivos principales
 
-| Archivo | Proposito | Estado |
-|---|---|---|---|
-| `main.py` | App FastAPI con titulo, descripcion y version. Incluye el router de auth y video, CORS y lifespan (crea tablas al inicio). | Implementado |
-| `settings.py` | Pydantic Settings con validacion: `AWS_*`, `S3_ENDPOINT_URL`, `DATABASE_URL`, `JWT_*`. | Implementado |
-| `database.py` | Engine SQLModel + `get_session` como dependency de FastAPI. | Implementado |
-| `models.py` | Tablas SQLModel: `User`, `Video`, `UserLikesVideo`. User incluye `password_reset_token_hash` y `password_reset_expires_at`. | Implementado |
-| `clients.py` | Cliente S3 con boto3. Soporta endpoint URL custom (MinIO) y firma v4. | Implementado |
-| `pymodels.py` | Modelos Pydantic: multipart upload, auth (register, login, change-password, forgot-password, reset-password), listado y streaming. | Implementado |
-| `video_processor.py` | Transcodificacion con ffmpeg (MP4/H.264/AAC) + validacion de extensiones. | Implementado |
-| `auth/security.py` | Hash bcrypt + JWT (create/decode) con soporte de `password_version` + `create_reset_token` y `hash_reset_token`. | Implementado |
-| `auth/schemas.py` | Pydantic: `RegisterRequest`, `LoginRequest`, `ChangePasswordRequest`, `TokenResponse`, `UserResponse`. | Implementado |
-| `auth/dependencies.py` | `get_current_user`: valida JWT + verifica `password_version` contra BD. | Implementado |
-| `routes/video.py` | Router con prefijo `/api/v1/video`: multipart upload, listado, streaming, transcodificacion. | Implementado |
-| `routes/login.py` | Router con prefijo `/api/v1/auth`: register, login, change-password, forgot-password, reset-password, me. | Implementado |
-| `alembic/` | Migraciones con Alembic: `env.py` usa `settings.DATABASE_URL` + metadata de SQLModel. | Configurado |
-| `alembic.ini` | Configuracion de Alembic. | Configurado |
-| `entrypoint.sh` | Script que ejecuta `alembic upgrade head` antes de iniciar la app. | Implementado |
-| `pyproject.toml` | Dependencias: fastapi[standard], sqlmodel, alembic, boto3, passlib, pyjwt, bcrypt, pymysql. | Configurado |
-| `.env.example` | Template de variables de entorno con valores para MinIO local y MariaDB. | Configurado |
-| `uv.lock` | Lockfile de dependencias. | Generado |
+| Archivo / paquete | Proposito |
+|---|---|
+| `ClonetubeApplication.java` | Punto de entrada Spring Boot |
+| `controller/` | 5 REST controllers (ver endpoints) |
+| `service/` | Logica de negocio: `AuthService`, `VideoService`, `UserService`, `PointsService` |
+| `repository/UserRepository.java` | Spring Data JPA; incluye `findByUsername`, `findByEmail`, `findByVerifyCode` |
+| `models/` | Entidades JPA: `User`, `Video`, `UserFollowsUser`, `UserLikesVideo`, `UserCanViewVideo`, `MultipartUpload`, `PointsHistory`, `EmailMessage` |
+| `dtos/` | DTOs de request/response (auth, multipart, feed, canal, studio, puntos) |
+| `config/SecurityConfig.java` | CSRF off, stateless, `/api/v1/auth/**` permitAll, resto denyAll + JWT resource server, `@EnableMethodSecurity` |
+| `config/JwtConfig.java` | `JwtDecoder`/`JwtEncoder` HS256 a partir de `security.jwt.secret` |
+| `config/SqsConfig.java` | Bean `SqsClient` con `aws.sqs.region` |
+| `security/UserJwtAuthenticationConverter.java` | Convierte el JWT en `Authentication` |
+| `decorators/` | `@RequireAuth`, `@RequireAdmin` (anotaciones custom) |
+| `db/migration/V1__initial_version.sql` | Esquema completo gestionado por Flyway |
 
-### Dependencias (`pyproject.toml`)
+### Dependencias (`pom.xml`)
 
 | Dependencia | Version | Proposito |
-|---|---|---|---|
-| `fastapi[standard]` | `>=0.139.0` | Framework web asincrono. El extra `[standard]` incluye uvicorn, pydantic, etc. |
-| `sqlmodel` | `>=0.0.39` | ORM que combina SQLAlchemy y Pydantic. |
-| `alembic` | `>=1.18.5` | Migraciones de BD. |
-| `boto3` | `>=1.43.40` | SDK de AWS para interactuar con S3/MinIO. |
-| `passlib[bcrypt]` | `>=1.7.4` | Hashing de contraseñas con bcrypt. |
-| `pyjwt[crypto]` | `>=2.10.0` | Creacion y validacion de tokens JWT. |
-| `bcrypt` | `==4.1.3` | Algoritmo bcrypt para passlib. |
-| `pymysql` | `>=1.1.1` | Driver MySQL para SQLAlchemy. |
+|---|---|---|
+| `spring-boot-starter-parent` | 4.0.7 | Parent de Spring Boot |
+| `spring-boot-starter-data-jpa` | — | ORM / repositorios |
+| `spring-boot-starter-flyway` | — | Migraciones de BD |
+| `spring-boot-starter-security` | — | Seguridad |
+| `spring-boot-starter-oauth2-resource-server` | — | Validacion de JWT |
+| `spring-boot-starter-webmvc` | — | Web MVC |
+| `spring-boot-starter-jackson` | — | Serializacion JSON |
+| `springdoc-openapi-starter-webmvc-ui` | 3.0.2 | Swagger UI (`/docs`) |
+| `mysql-connector-j` / `mariadb-java-client` | — | Drivers JDBC (runtime) |
+| `lombok` | — | Boilerplate (optional) |
+| `software.amazon.awssdk:s3` / `sqs` | 2.46.21 (BOM) | Clientes S3 y SQS |
+| `spring-boot-starter-test` + `webmvc-test` | — | Tests (scope test) |
+| `h2` | — | BD en memoria para tests (scope test) |
+
+### Configuracion (`application.properties`)
+
+| Variable de entorno | Propiedad Spring |
+|---|---|
+| `SPRING_DATASOURCE_URL` | `spring.datasource.url` |
+| `SPRING_DATASOURCE_USERNAME` | `spring.datasource.username` |
+| `SPRING_DATASOURCE_PASSWORD` | `spring.datasource.password` |
+| `JWT_SECRET` | `security.jwt.secret` |
+| `AWS_REGION` | `aws.sqs.region` |
+| `SQS_QUEUE_URL` | `aws.sqs.queue-url` |
+| `AWS_BUCKET_NAME` | `aws.s3.bucket` |
+| `S3_ENDPOINT_URL` | `aws.s3.endpoint` |
+| `S3_PUBLIC_ENDPOINT_URL` (opcional) | `aws.s3.public-endpoint` |
+| `DOMAIN` | `domain` |
+
+`spring.jpa.hibernate.ddl-auto=validate` (el esquema lo gestiona Flyway, `V1__initial_version.sql`).
 
 ### API — Endpoints implementados
 
+**Auth** (`/api/v1/auth`, prefix `POST`/`GET`):
+
 | Metodo | Ruta | Proposito |
 |---|---|---|
-| `POST` | `/api/v1/video/start-multipart` | Inicia un multipart upload en S3. Recibe `original_filename` por query. Genera key UUID. Devuelve `uploadId`, `key`, `original_filename`. |
-| `PUT` | `/api/v1/video/upload-chunk` | Recibe el fragmento y lo reenvia a S3 con el cliente interno. Parametros: `filename`, `upload_id`, `chunk_number`. Devuelve el `ETag`. Es el camino que usa el frontend. |
-| `GET` | `/api/v1/video/sign-chunk` | Genera URL prefirmada (1h) para subir un fragmento. Parametros: `filename`, `upload_id`, `chunk_number`. Solo sirve si el bucket es accesible desde el navegador. |
-| `POST` | `/api/v1/video/complete-multipart` | Completa el multipart upload. Recibe `filename`, `uploadId`, `parts[]` en el body. |
-| `GET` | `/api/v1/video/list` | Lista videos en S3 con metadatos (size, last_modified, original_filename). |
-| `GET` | `/api/v1/video/stream-url` | Devuelve la URL de reproduccion (`/api/v1/video/stream`). Para videos no publicos incluye el JWT en la query string. |
-| `GET` | `/api/v1/video/stream` | Sirve el video desde S3 con soporte de `Range`. Acepta el JWT por header o por query param `token`. |
-| `POST` | `/api/v1/auth/register` | Registra un nuevo usuario. Devuelve token JWT. |
-| `POST` | `/api/v1/auth/login` | Inicia sesion con username/password. Devuelve token JWT. |
-| `POST` | `/api/v1/auth/change-password` | Cambia la contraseña (requiere auth). Incrementa `password_version` invalidando tokens anteriores. |
-| `POST` | `/api/v1/auth/forgot-password` | Solicita restablecimiento de contraseña. Genera token hash con expiracion de 15 min. |
-| `POST` | `/api/v1/auth/reset-password` | Restablece contraseña con token. Incrementa `password_version`. |
-| `GET` | `/api/v1/auth/me` | Devuelve datos del usuario autenticado. |
-| `GET` | `/api/v1/video/feed` | Feed personalizado. Prioriza a los autores seguidos; admite `limit` y `only_following`. |
-| `GET` | `/api/v1/users/{username}/follow` | Estado de seguimiento (auth opcional) y numero de seguidores. |
-| `POST` | `/api/v1/users/{username}/follow` | Seguir a un usuario (idempotente). |
-| `DELETE` | `/api/v1/users/{username}/follow` | Dejar de seguir a un usuario (idempotente). |
-| `GET` | `/api/v1/users/me/following` | Usuarios seguidos por el usuario autenticado. |
-| `GET` | `/api/v1/users/{username}/channel` | Ficha del canal: nombre, seguidores, seguidos, nº de vídeos y estado de seguimiento. |
-| `GET` | `/api/v1/users/{username}/videos` | Vídeos del canal paginados (`page`, `page_size`; 20 por defecto, máximo 50). |
+| `POST` | `/register` | Registro (devuelve `status: pending_confirmation` + codigo) |
+| `POST` | `/login` | Login, devuelve token JWT |
+| `POST` | `/change-password` | Cambio de contrasena (auth) |
+| `POST` | `/forgot-password` | Solicita reset, genera token |
+| `POST` | `/reset-password` | Restablece contrasena con token |
+| `GET` | `/me` | Datos del usuario autenticado |
+| `GET` | `/test_mail` | Endpoint de prueba de envio de email |
+| `GET` | `/verify/{code}` | Verificacion de email por codigo |
 
-### Algoritmo del feed (`feed.py`)
+**Video** (`/api/v1/video`, todos `@RequireAuth` salvo stream/detail):
 
-Modulo puro, sin acceso a BD ni a S3, para poder probarlo aislado:
+| Metodo | Ruta | Proposito |
+|---|---|---|
+| `POST` | `/start-multipart` | Inicia multipart upload en S3, genera key UUID |
+| `GET` | `/sign-chunk` | URL prefirmada (1h) para subir un fragmento directo a S3 |
+| `PUT` | `/upload-chunk` | Recibe el fragmento y lo reenvia a S3 (camino del frontend) |
+| `POST` | `/complete-multipart` | Completa el multipart upload |
+| `DELETE` | `/cancel-multipart` | Aborta un multipart upload |
+| `GET` | `/list` | Lista videos en S3 con metadatos |
+| `GET` | `/catalog` | Catalogo de videos |
+| `GET` | `/feed` | Feed personalizado (`limit`, `only_following`) |
+| `GET` | `/detail` | Detalle de video |
+| `GET` | `/studio` | Listado del estudio del autor |
+| `PATCH` | `/{video_id}` | Actualiza video (nombre, descripcion, visibilidad...) |
+| `DELETE` | `/{video_id}` | Elimina video |
+| `GET` | `/stream-url` | URL de reproduccion (`/api/v1/video/stream`) |
+| `GET` | `/stream` | Sirve el video desde S3 con soporte `Range` |
 
-- `recency_score`: decaimiento exponencial con semivida de 72 h.
-- `popularity_score`: `log1p(likes)`, crecimiento sublineal.
-- `score_candidate`: suma novedad, popularidad y `FOLLOW_BOOST`.
-- `rank_candidates`: los seguidos forman un bloque que va siempre delante
-  (criterio de orden, no sumando) y dentro de cada bloque una seleccion voraz
-  penaliza al autor que ya ha colocado videos (`AUTHOR_DIVERSITY_PENALTY`).
-  Los empates se resuelven por `video_id` para que el orden sea determinista.
+**Users** (`/api/v1/users`):
 
-Las consultas de la relacion de seguimiento viven en `follows.py`.
+| Metodo | Ruta | Proposito |
+|---|---|---|
+| `GET` | `/me/following` | Usuarios seguidos por el autenticado |
+| `GET` | `/{username}/channel` | Ficha del canal |
+| `GET` | `/{username}/videos` | Videos del canal paginados (`page`, `page_size`) |
+| `GET` | `/{username}/follow` | Estado de seguimiento |
+| `POST` | `/{username}/follow` | Seguir (idempotente) |
+| `DELETE` | `/{username}/follow` | Dejar de seguir (idempotente) |
 
-### Canal (`channels.py`)
+**Otros**: `GET /api/v1/points` (puntos del usuario) y `GET /api/v1/health`.
 
-Consultas de la pagina de canal, separadas de la ruta para poder probarlas:
+### Base de datos (Flyway `V1__initial_version.sql`)
 
-- `count_videos` / `page_of_videos`: solo el propietario ve sus videos ocultos y
-  privados; el resto de visitantes ve unicamente los publicos.
-- Orden por `created_at` descendente con desempate por `id`, para que un mismo
-  video no pueda aparecer en dos paginas.
-- `DEFAULT_PAGE_SIZE = 20` y `MAX_PAGE_SIZE = 50`.
+Tablas: `user` (username, password_hash, password_version, verify_code, points, is_admin...), `user_follows_user`, `video` (filename, author, visibility...), `user_can_view_video`, `multipart_upload` (upload_id, upload_key, owner_id, status), `user_likes_video`, `points_history`.
 
-### Analisis tecnico
+### Tests
 
-- **FastAPI** elegido por rendimiento asincrono, validacion con Pydantic y OpenAPI/Swagger automatico.
-- **boto3** con soporte para `endpoint_url` permite usar MinIO local o cualquier S3-compatible.
-- Las claves de video se generan con `uuid4` dentro de `videos/` para evitar colisiones.
-- El registro `_filename_registry` es un `dict` en memoria (no persiste entre reinicios).
-- `models.py` define tablas SQLModel (`User`, `Video`, `UserLikesVideo`) mapeadas a MariaDB. User incluye campos de reset de contraseña.
-- `alembic/` configurado con `env.py` que lee `settings.DATABASE_URL` y usa `SQLModel.metadata` para autogenerate. Con migracion `0001_add_password_reset_fields` generada.
-- CORS configurado en `main.py` con `CORSMiddleware` (allow all origins).
-- Autenticacion JWT implementada: registro, login, cambio de contraseña con `password_version`, forgot/reset password con token de 15 min, proteccion de rutas via `get_current_user`.
-- `routes/login.py` reemplaza a `routes/auth.py` con 6 endpoints completos.
-- No hay tests.
+- `src/test/resources/application-test.properties`: H2 en memoria, Flyway desactivado, JWT de test.
+- `ClonetubeApplicationTests`: carga el contexto.
+- `AuthControllerTest`: `@WebMvcTest` con mocks (Spring Boot 4), cubre register/login con el contrato actual (`pending_confirmation`).
+- `EmailMessageTest`: modelo Pydantic del worker (portado).
+- Ejecutar: `mvn -B test` en `backend/` (funciona sin BD externa).
 
-### Tareas pendientes
+### Dockerfile
 
-- [ ] Migrar `_filename_registry` a base de datos.
-- [ ] Implementar endpoints REST adicionales (listado, busqueda, streaming).
-- [ ] Agregar tests con `pytest` + `httpx`.
+1. **build**: `maven:3.9-eclipse-temurin-25`, `dependency:go-offline` + `package -DskipTests`.
+2. **runtime**: `eclipse-temurin:25-jre-alpine`, usuario `app` no root, `EXPOSE 8080`, `java -jar app.jar`.
 
 ---
 
@@ -183,217 +196,152 @@ Consultas de la pagina de canal, separadas de la ruta para poder probarlas:
 
 ### Descripcion general
 
-SPA construida con **Vue 3** (Composition API + `<script setup>`), **TypeScript 6.0**, **Vite 8**, **Pinia** para estado global y **Vue Router 5** para enrutamiento. Tema oscuro con CSS custom. El unico flujo implementado es la vista de desarrollo (`/dev`) con el modal de subida multipart a S3.
+SPA con **Vue 3** (Composition API + `<script setup lang="ts">`), **TypeScript**, **Vite 8**, **Pinia** y **Vue Router 5**. Tema oscuro. Tests con **Vitest + Vue Test Utils + jsdom**. Cliente HTTP con **axios**.
 
 ### Estructura de `src/`
 
 ```
 src/
-├── App.vue                    # <RouterView /> + reset CSS + tema oscuro
-├── main.ts                    # Bootstrap: Pinia + Router
-├── router/
-│   └── index.ts               # Ruta /dev con lazy loading
-├── stores/
-│   └── counter.ts             # Store de ejemplo (no funcional)
+├── App.vue                  # <RouterView /> + reset CSS + tema oscuro
+├── main.ts                  # Bootstrap: Pinia + Router
+├── styles.css               # Estilos globales
+├── types.ts                 # Tipos compartidos (User, Token, Video...)
+├── router/index.ts          # Rutas con lazy loading
+├── stores/user.ts           # Auth store (login, register, logout, token persistido)
+├── composables/useTvSignOut.ts
+├── api/                     # axios clients: channel, feed, social, video
 ├── views/
-│   └── DevView.vue            # Sandbox: interfaz de prueba de multipart upload
+│   ├── IndexView.vue        # Home / feed
+│   ├── WatchView.vue        # Reproductor de video
+│   ├── StudioView.vue       # Estudio del autor
+│   ├── ChannelView.vue      # Pagina de canal (/channel/@usuario)
+│   └── DevView.vue          # Sandbox de multipart upload
 └── components/
-    └── UploadModal.vue        # Modal completo de subida: seleccion, progreso, resultado
+    ├── Header.vue           # Header de la app
+    ├── VideoPlayer.vue      # Reproductor (stream por /api/v1/video/stream)
+    ├── FollowButton.vue     # Boton de suscripcion
+    ├── UploadModal.vue      # Modal de subida multipart por fragmentos
+    ├── TvModalShell.vue     # Shell de modales estilo TV
+    └── TvSignOutOverlay.vue # Overlay de cierre de sesion
 ```
 
-### Analisis por archivo fuente
+### Paginas
 
-#### `App.vue`
-
-```vue
-<script setup lang="ts"></script>
-<template>
-  <RouterView />
-</template>
-<style>
-  /* Reset CSS universal + tema oscuro (#0f0f1a) */
-</style>
-```
-
-- `<RouterView />` implementado. Sin layout compartido (header, sidebar).
-- Estilos globales: reset de box-sizing, fondo oscuro, fuente Inter.
-
-#### `router/index.ts`
-
-- Ruta unica: `/dev` → `DevView.vue` con lazy loading.
-- `createWebHistory` (sin `#` en URL).
-
-#### `DevView.vue`
-
-Pagina sandbox para probar el flujo multipart upload. Incluye:
-- Header con badge "DEV" y enlace de vuelta.
-- Hero section con descripcion del flujo y boton "Subir video".
-- Diagrama de los 4 pasos del flujo (seleccionar, fragmentar, subir, completar).
-- Listado de los 3 endpoints utilizados con metodo y descripcion.
-- Seccion de requisitos.
-- Renderiza `<UploadModal>` condicionalmente.
-
-#### `UploadModal.vue`
-
-Componente modal completo que implementa el flujo multipart upload cliente:
-- **Estado**: maquina de estados (`idle`, `uploading`, `done`, `error`).
-- **Fragmentacion**: chunks de 5 MB.
-- **Flujo**:
-  1. `POST /api/v1/video/start-multipart` — inicia la subida.
-  2. Por cada chunk: `PUT /api/v1/video/upload-chunk` — el fragmento viaja por la API,
-     que lo reenvia a S3. Asi la subida no depende de que el bucket sea accesible
-     desde el navegador (era el origen del 404 al subir).
-  3. `POST /api/v1/video/complete-multipart` — completa la subida.
-- **UI**: drop zone, barra de progreso, mensaje de estado en lenguaje llano, pantalla de exito, pantalla de error.
-- **Trazas**: el detalle tecnico (fragmentos, `uploadId`, `key`, errores) va a `console.debug`/`console.error`
-  con el prefijo `[Clonetube][subida]`; la pantalla nunca lo muestra.
-- Estilos scoped con diseño moderno (modal, overlay con backdrop-blur, gradientes).
+- **Home** (`/`): feed de videos (`api/feed.ts`).
+- **Watch** (`/watch`): reproduccion con `VideoPlayer` + stream con `Range` (`api/video.ts`).
+- **Studio** (`/studio`): gestion de videos del autor (`/api/v1/video/studio`).
+- **Channel** (`/channel/@usuario`): ficha de canal + rejilla paginada de videos (`api/channel.ts`); si la URL llega sin arroba se reescribe.
+- **Dev** (`/dev`): sandbox de multipart upload con `UploadModal` (chunks de 5 MB via `PUT /upload-chunk`).
 
 ### Dependencias
 
 | Dependencia | Version | Tipo | Proposito |
 |---|---|---|---|
-| `vue` | `^3.5.38` | runtime | Framework reactivo de UI |
-| `vue-router` | `^5.1.0` | runtime | Enrutamiento SPA |
-| `pinia` | `^3.0.4` | runtime | Gestion de estado global |
-| `vite` | `^8.0.16` | dev | Build tool y dev server |
-| `@vitejs/plugin-vue` | `^6.0.7` | dev | Soporte de Vue SFC en Vite |
-| `vite-plugin-vue-devtools` | `^8.1.2` | dev | Vue DevTools en Vite |
-| `typescript` | `~6.0.0` | dev | TypeScript |
-| `vue-tsc` | `^3.3.5` | dev | Type checking para `.vue` |
-| `npm-run-all2` | `^9.0.2` | dev | Ejecutar scripts en paralelo/secuencia |
+| `vue` | ^3.5.38 | runtime | UI |
+| `vue-router` | ^5.1.0 | runtime | Enrutamiento SPA |
+| `pinia` | ^3.0.4 | runtime | Estado global |
+| `axios` | ^1.18.1 | runtime | Cliente HTTP |
+| `vite` | ^8.0.16 | dev | Build tool |
+| `typescript` | ~6.0.0 | dev | Tipos |
+| `vue-tsc` | ^3.3.5 | dev | Type checking |
+| `vitest` | ^4.1.10 | dev | Tests |
+| `@vue/test-utils` + `jsdom` | — | dev | Testing de componentes |
+| `npm-run-all2` | ^9.0.2 | dev | Scripts en paralelo |
 
 ### Scripts
 
 | Script | Comando | Proposito |
 |---|---|---|
-| `dev` | `vite` | Servidor de desarrollo con HMR |
-| `build` | `run-p type-check "build-only {@}" --` | Build: type-check + vite build en paralelo |
-| `preview` | `vite preview` | Previsualizar build de produccion |
-| `build-only` | `vite build` | Solo build sin type-check |
+| `dev` | `vite` | Dev server con HMR |
+| `build` | `run-p type-check "build-only {@}" --` | Type-check + build |
 | `type-check` | `vue-tsc --build` | Verificacion de tipos |
+| `test` | `vitest run` | Tests |
 
-### Analisis tecnico
+### Dockerfile
 
-- **Vite 8**: HMR instantaneo, build con Rollup.
-- **TypeScript 6.0** con `noUncheckedIndexedAccess`.
-- **Pinia** con Setup Store syntax.
-- **Vite proxy**: las peticiones a `/api` se redirigen al backend (configurado en `vite.config.ts` o via nginx en produccion).
-- El frontend implementa el flujo completo de subida multipart desde el navegador.
-- No usa librerias externas de UI — todos los estilos son CSS scoped manual.
-- Tema oscuro consistente en toda la app.
+Build multi-stage: **node:24-slim + pnpm** compila y descarga Caddy v2.9.1 estatico; runtime **gcr.io/distroless/static-debian12:nonroot** con `dist/`, Caddy escucha en 8080, proxy `/api/` a `backend:8080` y SPA fallback a `index.html`.
 
-### Pagina de canal
+---
 
-- Ruta `/channel/@usuario` (`ChannelView.vue`). Si la URL llega sin arroba se
-  reescribe a la forma canonica antes de pedir datos.
-- Cabecera del canal con avatar, nombre, `@usuario`, numero de videos y el boton
-  de suscripcion (`FollowButton.vue`).
-- Rejilla de videos paginada de 20 en 20. La pagina viaja en la query (`?page=2`)
-  para que el enlace se pueda compartir y el navegador conserve el historial.
-- `api/channel.ts` habla con `/api/v1/users/{username}/channel` y `/videos`.
+## Worker (`worker/`)
 
-### Tareas pendientes
+Worker Python independiente que consume mensajes de **SQS** y envia emails por **SMTP** (smtplib).
 
-- [ ] Crear layout principal con header, sidebar y `<RouterView />`.
-- [ ] Crear vistas: `HomeView`, `SearchView`.
-- [ ] Definir rutas adicionales con lazy loading.
-- [ ] Crear stores reales: `useAuthStore`, `useVideoStore`.
-- [ ] Agregar componentes UI: `VideoCard`, `CommentSection`, `VideoPlayer`, `Sidebar`.
-- [ ] Eliminar store de ejemplo `counter.ts`.
-- [ ] Agregar vistas para login/registro.
-- [ ] Integrar reproductor de video (HLS/DASH).
+- `main.py`: loop de polling con `visibility_timeout`/`wait_time_seconds` (20s long-polling), manejo de señales (SIGTERM/SIGINT) para parada limpia, borrado de mensajes tras enviar.
+- `mailer.py`: `send_email` por SMTP con SSL.
+- `models.py`: `EmailMessage` (Pydantic) — el payload que publica el backend en SQS.
+- `settings.py`: `queue_url`, `aws_region`, `smtp_*`, `visibility_timeout`, `wait_time_seconds`.
+- Dockerfile propio; imagen `ghcr.io/dsaub/clonetube-worker`.
+
+---
+
+## Android (`android_app/`)
+
+App Android en **Kotlin + Jetpack Compose** (Gradle).
+
+- `MainActivity.kt` + `ui/ClonetubeApp.kt`: navegacion Compose.
+- `ui/screens/`: `AuthScreen`, `ChannelScreen`, `HomeTab`, etc.
+- `ui/components/`: `VideoRow`, `Common`, `Icons`.
+- `model/Video.kt`: modelo de video.
+- Habla con la misma API `/api/v1`.
 
 ---
 
 ## Deploy (`deploy/`)
 
-### Estado actual
+### docker-compose.yml (raiz, desarrollo)
 
-Configuracion completa de despliegue con Docker Compose. Stack de 6 servicios. `docker-compose.yml` en raiz para desarrollo (build local), `deploy/docker-compose.yml` para produccion (imagenes ghcr.io).
+Stack local: `mariadb:11`, `minio` (+ `minio-init` que crea el bucket), `backend` (build local), `frontend` (build local), `nginx` con `deploy/nginx.conf` y certs.
 
-### Servicios (`docker-compose.yml`)
+### deploy/docker-compose.yml (produccion)
 
-| Servicio | Imagen | Puerto | Proposito |
-|---|---|---|---|
-| `mariadb` | `mariadb:11` | — | Base de datos relacional |
-| `minio` | `minio/minio:latest` | `9000` (API), `9001` (consola) | Almacenamiento S3-compatible |
-| `minio-init` | `minio/mc:latest` | — | Crea el bucket automaticamente al iniciar |
-| `backend` | `ghcr.io/dsaub/clonetube-backend:latest` | `8000` (interno) | API FastAPI |
-| `frontend` | `ghcr.io/dsaub/clonetube-frontend:latest` | `8080` (interno) | SPA servida por nginx distroless |
-| `nginx` | `nginx:alpine` | `80`, `443` | Reverse proxy HTTPS con SSL termination |
-
-### Dockerfiles
-
-Los Dockerfiles estan en `backend/Dockerfile` y `frontend/Dockerfile` (no en `deploy/`).
-
-#### `backend/Dockerfile`
-
-Build multi-stage sobre Alpine (base minima para reducir superficie de ataque):
-1. **builder**: `python:3.14-alpine` + `uv` (version fijada, no `latest`). Copia `pyproject.toml` y `uv.lock`, ejecuta `uv sync --no-dev --no-build --locked`.
-2. **runtime**: `python:3.14-alpine` con `apk upgrade` + ffmpeg instalado via apk. Copia `.venv` del builder, el codigo y `entrypoint.sh`. Se ejecuta como usuario `app` (uid 10001), no root. Comando: `fastapi run main.py --port 8000`. Entrypoint: `/entrypoint.sh` que ejecuta `alembic upgrade head` antes de iniciar.
-
-La eleccion de Alpine es deliberada: la base Debian arrastraba perl, glibc, apt/dpkg y el arbol de dependencias completo de `ffmpeg` de Debian (mesa, SDL2, X11, llvm...), que concentraban practicamente todos los CVEs sin parche de la imagen. Las dependencias Python tienen ruedas `musllinux` para x86_64 y aarch64, por lo que `--no-build` sigue funcionando en las dos plataformas que construye el CI.
-
-#### `frontend/Dockerfile`
-
-Build multi-stage con imagenes distroless (Google distroless):
-1. **build**: `node:24-slim` + `pnpm`. Instala dependencias, ejecuta `pnpm run build`. Descarga binario estatico de Caddy v2.9.1 y genera Caddyfile.
-2. **runtime**: `gcr.io/distroless/static-debian12:nonroot` (distroless: sin shell, sin gestor de paquetes, usuario `nonroot`). Copia `dist/` a `/usr/share/nginx/html`, binario de Caddy y Caddyfile. Caddy escucha en puerto 8080, proxy reverso a `backend:8000` para `/api/`, SPA fallback a `index.html`.
+Imagenes ghcr.io pre-built: `backend`, `frontend`, `nginx` y `worker`. MariaDB/MinIO se asumen externos (no estan en el stack).
 
 ### nginx.conf
 
-Configuracion de nginx como reverse proxy HTTPS:
-- Puerto 80 → redirect 301 a HTTPS.
-- Puerto 443 → SSL termination con certificados en `/etc/nginx/certs/`.
-- `client_max_body_size 10G` (para subida de videos grandes).
-- Rutas: `/api/` → `backend:8000`, assets estaticos con cache 1y, resto → `frontend:8080`.
+- Puerto 80 → redirect 301 a HTTPS; 443 → SSL termination (certs en `/etc/nginx/certs/`).
+- `client_max_body_size 10G`.
+- `/api/` → `backend:8080` con `proxy_request_buffering off` y `proxy_buffering off` (necesario para streaming/subida de fragmentos), timeouts de 300s.
+- `/docs` y `/openapi.json` → `backend:8080` (Swagger).
+- Assets estaticos con cache 1y, resto → `frontend:8080` (SPA fallback).
 
 ### generate-certs.sh
 
-Script bash que genera certificados autofirmados para desarrollo local:
-- `privkey.pem` (clave privada RSA 2048).
-- `fullchain.pem` (certificado x509).
-- Valido por 365 dias.
-- Subject: `localhost` con SAN: `DNS:localhost`, `DNS:*.localhost`, `IP:127.0.0.1`.
-- No sobrescribe si ya existen.
+Genera certificados autofirmados (RSA 2048, 365 dias, SAN `localhost` + `127.0.0.1`); no sobrescribe existentes.
 
-### entrypoint.sh
+### Variables de entorno
 
-Script bash que ejecuta `alembic upgrade head` antes de iniciar la aplicacion FastAPI. Se usa como ENTRYPOINT en el Dockerfile de produccion.
-
-### Variables de entorno requeridas
-
-| Variable | Default | Proposito |
+| Variable | Default (dev) | Proposito |
 |---|---|---|
-| `MARIADB_ROOT_PASSWORD` | `rootpassword` | Password root de MariaDB |
-| `MARIADB_DATABASE` | `clonetube` | Nombre de la BD |
-| `MARIADB_USER` | `clonetube` | Usuario de la BD |
-| `MARIADB_PASSWORD` | `password` | Password del usuario |
-| `MINIO_ROOT_USER` | `minioadmin` | Usuario root de MinIO |
-| `MINIO_ROOT_PASSWORD` | `minioadmin` | Password root de MinIO |
-| `AWS_ACCESS_KEY_ID` | `minioadmin` | Access key S3 |
-| `AWS_SECRET_ACCESS_KEY` | `minioadmin` | Secret key S3 |
-| `AWS_REGION` | `us-east-1` | Region AWS |
-| `AWS_BUCKET_NAME` | `clonetube` | Nombre del bucket S3 |
-| `S3_ENDPOINT_URL` | `http://minio:9000` | Endpoint S3 (MinIO) |
-| `DATABASE_URL` | `mysql+pymysql://clonetube:password@mariadb:3306/clonetube` | Cadena de conexion BD |
-| `JWT_SECRET` | `cambiar-por-clave-segura-de-al-menos-32-byts` | Secreto para firmar tokens JWT |
-| `JWT_ALGORITHM` | `HS256` | Algoritmo de firma JWT |
-| `JWT_EXPIRE_MINUTES` | `60` | Tiempo de expiracion del token en minutos |
+| `MARIADB_ROOT_PASSWORD` / `MARIADB_DATABASE` / `MARIADB_USER` / `MARIADB_PASSWORD` | rootpassword / clonetube / clonetube / password | MariaDB |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | minioadmin | MinIO |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | minioadmin | Credenciales S3 |
+| `AWS_REGION` | us-east-1 (prod: eu-west-3) | Region |
+| `AWS_BUCKET_NAME` | clonetube | Bucket S3 |
+| `S3_ENDPOINT_URL` | http://minio:9000 | Endpoint S3 |
+| `S3_PUBLIC_ENDPOINT_URL` | http://localhost:9000 (prod: vacio) | Solo para `/sign-chunk` |
+| `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | jdbc:mariadb://mariadb:3306/clonetube / clonetube / password | Conexion BD del backend |
+| `JWT_SECRET` | cambiar-por-clave-segura... | Firma JWT |
+| `SQS_QUEUE_URL` | (vacio) | Cola SQS del worker |
+| `DOMAIN` | http://localhost | Dominio publico |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` | — | SMTP del worker (prod) |
+| `QUEUE_URL` | — | Cola del worker (prod) |
 
 ---
 
-## CI/CD (`.github/workflows/docker-build.yml`)
+## CI/CD (`.github/workflows/`)
 
-Workflow de GitHub Actions que construye y publica imagenes Docker en `ghcr.io`.
+### ci.yml — push a `latest`
 
-- **Trigger**: push a `latest`, `workflow_dispatch` (manual).
-- **Estrategia**: matrix sobre `[backend, frontend]`.
-- **Pasos**: checkout → login a ghcr.io → setup buildx → build & push.
-- **Tags**: `latest` y `${{ github.sha }}`.
-- **Cache**: GitHub Actions cache para acelerar builds.
-- **Contexto**: `./<service>` con Dockerfile en `./<service>/Dockerfile`.
+1. **backend-tests**: setup-java (temurin 25, cache maven) + `mvn -B test` en `backend/`.
+2. **frontend-tests**: pnpm + Node 24 + `vitest run` en `frontend/`.
+3. **build** (needs tests): matrix `[backend, frontend, worker]`, buildx multi-plataforma (`linux/amd64,linux/arm64`), push a `ghcr.io/dsaub/clonetube-<service>` con tags `latest` y `${{ github.sha }}`, cache gha por scope.
+
+### ci-tests.yml — resto de branches
+
+Igual que los pasos de tests de ci.yml (backend + frontend), sin build/push.
+
+Los reportes de tests se publican con `dorny/test-reporter` (surefire XML / JUnit XML de vitest).
 
 ---
 
@@ -402,33 +350,36 @@ Workflow de GitHub Actions que construye y publica imagenes Docker en `ghcr.io`.
 ```mermaid
 graph TD
     subgraph Frontend["Frontend (Vue 3 + Vite)"]
-        A[App.vue] --> B[RouterView]
-        B --> C[DevView]
-        C --> D[UploadModal]
-        F[Pinia Stores]
+        R[RouterView] --> I[IndexView / WatchView / StudioView / ChannelView]
+        S[stores/user.ts] -->|axios| API
+        C[UploadModal / VideoPlayer]
     end
 
-    subgraph Backend["Backend (FastAPI)"]
-        G[FastAPI App]
-        G --> H[routes/video.py]
-        H --> I[boto3 S3 Client]
-        I --> J[(MinIO / S3)]
-        G --> K[(MariaDB)]
-        G --> L[routes/login.py]
-        L --> M[auth/security.py]
-        L --> N[(MariaDB - Users)]
+    subgraph Backend["Backend (Spring Boot 4 + Java 25)"]
+        API[Controllers /api/v1/*] --> SVC[Services]
+        SVC --> JPA[(MariaDB + Flyway)]
+        SVC --> S3[(MinIO / S3)]
+        SVC -->|publica EmailMessage| SQS[(SQS)]
+        SEC[SecurityConfig + JwtConfig] --> API
     end
 
-    subgraph Deploy["Deploy (Docker Compose)"]
-        O[nginx :443] --> P[frontend :80]
-        O --> Q[backend :8000]
-        Q --> R[(mariadb)]
-        Q --> S[(minio)]
+    subgraph Worker["Worker (Python)"]
+        W[SQS poller] --> M[mailer SMTP]
+    end
+
+    subgraph Android["Android (Kotlin + Compose)"]
+        A[ClonetubeApp] -->|axios/HTTP| API
+    end
+
+    subgraph Deploy["Deploy (Docker Compose + nginx)"]
+        NG[nginx :443] --> F[frontend :8080]
+        NG --> B[backend :8080]
     end
 
     Frontend -->|HTTP REST API| Backend
-    Backend -->|JSON| Frontend
-    CI[GitHub Actions] -->|push images| T[ghcr.io]
+    Android -->|HTTP REST API| Backend
+    Backend --> Worker
+    CI[GitHub Actions] -->|push images| GHCR[(ghcr.io)]
 ```
 
 ---
@@ -437,46 +388,44 @@ graph TD
 
 | Capa | Estado | Progreso |
 |---|---|---|
-| Backend — Framework | FastAPI configurado con router | 15% |
-| Backend — API Multipart Upload | 3 endpoints implementados | 60% |
-| Backend — Modelos BD | SQLModel definido (User, Video, UserLikesVideo) | 30% |
-| Backend — Autenticacion JWT | Register, login, change-password, me, password_version, forgot/reset | 40% |
-| Backend — Migraciones | Alembic configurado con env.py + metadata SQLModel | 30% |
-| Backend — Tests | No iniciado | 0% |
-| Frontend — Estructura | App.vue con RouterView + tema oscuro | 15% |
-| Frontend — Componente Upload | UploadModal completo con flujo multipart | 80% |
-| Frontend — Vistas/Rutas | Solo `/dev` (sandbox) | 5% |
-| Frontend — Stores | Template de ejemplo | 2% |
-| Deploy — Docker | Stack completo con 6 servicios | 90% |
-| Deploy — CI/CD | GitHub Actions funcional | 80% |
+| Backend — API REST | Spring Boot 4.0.7, 5 controllers, ~30 endpoints | 70% |
+| Backend — Auth | JWT HS256, register/login/me, change/reset password, verify code, admin | 60% |
+| Backend — Multipart Upload | start/sign/upload/complete/cancel + stream con Range | 80% |
+| Backend — BD | JPA + Flyway (V1) sobre MariaDB | 60% |
+| Backend — Tests | H2 + WebMvcTest (auth, email model, context) | 30% |
+| Frontend — Vistas | Index, Watch, Studio, Channel, Dev | 60% |
+| Frontend — Auth store | `stores/user.ts` + api modules axios | 50% |
+| Frontend — Tests | Vitest + Test Utils (api specs, App) | 30% |
+| Worker — Email | SQS poller + SMTP, Dockerfile | 80% |
+| Android — App | Compose: Auth, Home, Channel screens | 30% |
+| Deploy — Docker | Compose dev + prod, nginx HTTPS, worker | 90% |
+| CI/CD | Tests (Maven/Vitest) + build/push multi-arch ghcr.io | 85% |
 
 ---
 
 ## Convenciones y guias para agentes
 
-### Backend
-- Usar **type hints** de Python en todo el codigo.
-- Los modelos de BD se definen con `SQLModel` (hereda de `SQLAlchemy` y `Pydantic`).
-- Las migraciones se gestionan con **Alembic**.
-- Seguir estructura modular: `models/`, `routers/`, `schemas/`, `services/`, `core/`.
-- Usar `uv` para gestion de dependencias: `uv add <paquete>`, `uv sync`.
-- Las variables de entorno se leen desde `settings.py`.
+### Backend (Spring Boot)
+- Java 25, Maven (`mvn` / `./mvnw`), Spring Boot 4.0.7.
+- Tests: `mvn -B test` en `backend/` (H2, sin BD externa).
+- Esquema gestionado por **Flyway** (`spring.jpa.hibernate.ddl-auto=validate`, nunca `update` en prod).
+- Seguridad: JWT HS256 via `spring-boot-starter-oauth2-resource-server`; anotaciones `@RequireAuth` / `@RequireAdmin`.
+- S3 y SQS con AWS SDK v2 (BOM en `dependencyManagement`).
+- DTOs en `dtos/`, entidades en `models/`, logica en `service/`, HTTP en `controller/`.
 
-### Frontend
-- Usar **`<script setup lang="ts">`** en todos los SFC de Vue.
-- Stores de Pinia con **Setup Store syntax** (funciones composables).
-- Rutas con **lazy loading**: `() => import('@/views/...')`.
-- Estilos con **CSS scoped**.
-- Alias `@` mapea a `src/`.
-- Usar `pnpm` como package manager.
-- Mantener el tema oscuro (`#0f0f1a` fondo, `#e0e0e0` texto, `#6c63ff` accent, `#2a2a4a` bordes).
+### Frontend (Vue)
+- `<script setup lang="ts">` en todos los SFC; estilos scoped.
+- Pinia Setup Store; rutas con lazy loading; alias `@` → `src/`.
+- Cliente HTTP con axios (`src/api/`).
+- Tests: `pnpm vitest run` en `frontend/`.
+- Tema oscuro (`#0f0f1a` fondo, `#e0e0e0` texto, `#6c63ff` accent, `#2a2a4a` bordes).
 
 ### General
-- Commits en espanol.
-- PRs pequenos y enfocados en un solo cambio.
-- No incluir secretos en el codigo (usar variables de entorno).
-- Las imagenes Docker se publican en `ghcr.io/dsaub/clonetube-<service>`.
+- Commits en espanol; PRs pequenos y enfocados.
+- No incluir secretos en el codigo (variables de entorno).
+- Imagenes Docker en `ghcr.io/dsaub/clonetube-<service>` (backend, frontend, worker).
+- `backend.old/` es legado: no modificar, no usar.
 
 ---
 
-*Ultima actualizacion: 2026-07-09*
+*Ultima actualizacion: 2026-08-05*
