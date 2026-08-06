@@ -21,7 +21,7 @@ class EmailMessageTest {
 
         String json = objectMapper.writeValueAsString(emailMessage);
         assertEquals(
-                "{\"id\":\"message-id\",\"to\":\"user@example.com\",\"subject\":\"Password reset\",\"body\":\"Your password reset code is: reset-code\"}",
+                "{\"id\":\"message-id\",\"to\":\"user@example.com\",\"subject\":\"Password reset\",\"body\":\"Your password reset code is: reset-code\",\"body_html\":null}",
                 json
         );
         assertTrue(emailMessage.body().contains("reset-code"));

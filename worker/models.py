@@ -5,3 +5,4 @@ class EmailMessage(BaseModel):
     to: EmailStr
     subject: str
     body: str
+    body_html: str | None = None

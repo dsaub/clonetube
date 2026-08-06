@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { useUserStore } from '@/stores/user';
+import { usePointsStore } from '@/stores/points';
 import { startTvSignOut } from '@/composables/useTvSignOut';
 import TvModalShell from '@/components/TvModalShell.vue';
+import NotificationsMenu from '@/components/NotificationsMenu.vue';
+import PointsWalletModal from '@/components/PointsWalletModal.vue';
 import axios from 'axios';
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 type AuthMode = 'login' | 'register';
 
 const user = useUserStore();
+const points = usePointsStore();
+const walletOpen = ref(false);
 const searchQuery = defineModel<string>('searchQuery', { default: '' });
 const searchFocused = ref(false);
 const authMode = ref<AuthMode>('login');
@@ -166,6 +171,11 @@ onBeforeUnmount(() => {
   clearTimeout(switchModeTimer);
   clearTimeout(switchEndTimer);
 });
+
+watch(() => user.logged_in, (logged) => {
+  if (logged) void points.refresh();
+  else points.balance = 0;
+});
 </script>
 
 <template>
@@ -201,6 +211,10 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="user.logged_in" class="user-menu">
+      <NotificationsMenu />
+      <button type="button" class="points-button" title="Mis puntos" @click="walletOpen = true">
+        <span aria-hidden="true">◆</span> {{ points.balance.toLocaleString('es-ES') }}
+      </button>
       <RouterLink to="/studio" class="studio-link">Studio</RouterLink>
       <div class="user-status">
         <span class="status-dot" aria-hidden="true"></span>
@@ -386,6 +400,8 @@ onBeforeUnmount(() => {
           </template>
         </div>
   </TvModalShell>
+
+  <PointsWalletModal v-if="walletOpen" @close="walletOpen = false" />
 </template>
 
 <style scoped>
@@ -550,6 +566,32 @@ onBeforeUnmount(() => {
   color: #bdb9ff;
   font-size: 0.86rem;
   font-weight: 750;
+}
+
+.points-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #3c3a58;
+  border-radius: 0.5rem;
+  background: #171725;
+  color: #e0dfff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 750;
+  white-space: nowrap;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.points-button:hover {
+  border-color: #6c63ff;
+  background: #24223d;
+}
+
+.points-button span {
+  color: #b9b5ff;
 }
 
 .studio-link:hover {

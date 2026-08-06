@@ -4,10 +4,11 @@ import lombok.RequiredArgsConstructor;
 import me.elordenador.clonetube.decorators.RequireAuth;
 import me.elordenador.clonetube.dtos.*;
 import me.elordenador.clonetube.services.VideoService;
-import org.springframework.core.io.Resource;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.Map;
 
@@ -20,41 +21,43 @@ public class VideoController {
 
     @PostMapping("/start-multipart")
     @RequireAuth
-    public StartMultipartResponseDTO startMultipart(@RequestParam String original_filename) {
-        return videoService.startMultipart(original_filename);
+    public StartMultipartResponseDTO startMultipart(Authentication auth,
+                                                    @RequestParam String original_filename) {
+        return videoService.startMultipart(auth.getName(), original_filename);
     }
 
     @GetMapping("/sign-chunk")
     @RequireAuth
-    public SignChunkResponseDTO signChunk(
-            @RequestParam String filename,
-            @RequestParam String upload_id,
-            @RequestParam Integer chunk_number) {
+    public SignChunkResponseDTO signChunk(Authentication auth,
+                                          @RequestParam String filename,
+                                          @RequestParam String upload_id,
+                                          @RequestParam Integer chunk_number) {
         return videoService.signChunk(filename, upload_id, chunk_number);
     }
 
     @PutMapping("/upload-chunk")
     @RequireAuth
-    public PartInfoDTO uploadChunk(
-            @RequestParam String filename,
-            @RequestParam String upload_id,
-            @RequestParam Integer chunk_number,
-            @RequestBody byte[] body) {
-        return videoService.uploadChunk(filename, upload_id, chunk_number, body);
+    public PartInfoDTO uploadChunk(Authentication auth,
+                                   @RequestParam String filename,
+                                   @RequestParam String upload_id,
+                                   @RequestParam Integer chunk_number,
+                                   @RequestBody byte[] body) {
+        return videoService.uploadChunk(auth.getName(), filename, upload_id, chunk_number, body);
     }
 
     @PostMapping("/complete-multipart")
     @RequireAuth
-    public CompleteMultipartResponseDTO completeMultipart(@RequestBody CompleteMultipartRequestDTO body) {
-        return videoService.completeMultipart(body);
+    public CompleteMultipartResponseDTO completeMultipart(Authentication auth,
+                                                          @RequestBody CompleteMultipartRequestDTO body) {
+        return videoService.completeMultipart(auth.getName(), body);
     }
 
     @DeleteMapping("/cancel-multipart")
     @RequireAuth
-    public Map<String, String> cancelMultipart(
-            @RequestParam String filename,
-            @RequestParam String upload_id) {
-        return videoService.cancelMultipart(filename, upload_id);
+    public Map<String, String> cancelMultipart(Authentication auth,
+                                               @RequestParam String filename,
+                                               @RequestParam String upload_id) {
+        return videoService.cancelMultipart(auth.getName(), filename, upload_id);
     }
 
     @GetMapping("/list")
@@ -68,48 +71,53 @@ public class VideoController {
     }
 
     @GetMapping("/feed")
-    public FeedDTO feed(
-            @RequestParam(defaultValue = "50") Integer limit,
-            @RequestParam(defaultValue = "false") Boolean only_following) {
-        return videoService.feed(limit, only_following);
+    public FeedDTO feed(Authentication auth,
+                        @RequestParam(defaultValue = "50") Integer limit,
+                        @RequestParam(defaultValue = "false") Boolean only_following) {
+        return videoService.feed(auth, limit, only_following);
     }
 
     @GetMapping("/detail")
-    public VideoDetailDTO detail(@RequestParam String key) {
-        return videoService.detail(key);
+    public VideoDetailDTO detail(Authentication auth, @RequestParam String key) {
+        return videoService.detail(auth, key);
     }
 
     @GetMapping("/studio")
     @RequireAuth
-    public StudioVideoListDTO studio() {
-        return videoService.studio();
+    public StudioVideoListDTO studio(Authentication auth) {
+        return videoService.studio(auth.getName());
     }
 
     @PatchMapping("/{video_id}")
     @RequireAuth
-    public StudioVideoItemDTO updateVideo(
-            @PathVariable String video_id,
-            @RequestBody VideoUpdateDTO body) {
-        return videoService.updateVideo(video_id, body);
+    public StudioVideoItemDTO updateVideo(Authentication auth,
+                                          @PathVariable String video_id,
+                                          @RequestBody VideoUpdateDTO body) {
+        return videoService.updateVideo(auth.getName(), video_id, body);
     }
 
     @DeleteMapping("/{video_id}")
     @RequireAuth
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteVideo(@PathVariable String video_id) {
-        videoService.deleteVideo(video_id);
+    public void deleteVideo(Authentication auth, @PathVariable String video_id) {
+        videoService.deleteVideo(auth.getName(), video_id);
     }
 
     @GetMapping("/stream-url")
-    public StreamUrlResponseDTO streamUrl(@RequestParam String key) {
-        return videoService.streamUrl(key);
+    public StreamUrlResponseDTO streamUrl(Authentication auth,
+                                          @RequestHeader(value = "Authorization", required = false) String authorization,
+                                          @RequestParam String key) {
+        String token = authorization != null && authorization.startsWith("Bearer ")
+                ? authorization.substring(7) : null;
+        return videoService.streamUrl(auth, token, key);
     }
 
     @GetMapping("/stream")
-    public ResponseEntity<Resource> stream(
+    public ResponseEntity<StreamingResponseBody> stream(
+            Authentication auth,
             @RequestParam String key,
             @RequestParam(required = false) String token,
             @RequestHeader(value = "Range", required = false) String range) {
-        return videoService.stream(key, token, range);
+        return videoService.stream(auth, key, token, range);
     }
 }

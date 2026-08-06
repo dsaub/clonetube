@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 @AllArgsConstructor
 @RequiredArgsConstructor
 @Entity
+@IdClass(UserCanViewVideoId.class)
 @Table(name = "user_can_view_video")
 public class UserCanViewVideo {
     @Id

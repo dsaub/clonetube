@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
+import java.time.Instant;
+
 @Data
 @AllArgsConstructor
 @RequiredArgsConstructor
@@ -24,4 +26,6 @@ public class PointsHistory {
     private User user;
     private Integer modifier;
     private String description;
+    private String type;
+    private Instant created_at;
 }

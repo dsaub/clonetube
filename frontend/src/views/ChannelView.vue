@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Header from '@/components/Header.vue'
 import FollowButton from '@/components/FollowButton.vue'
+import DonationModal from '@/components/DonationModal.vue'
 import {
   CHANNEL_PAGE_SIZE,
   channelPath,
@@ -28,6 +29,7 @@ const pages = ref(1)
 const total = ref(0)
 const loading = ref(true)
 const error = ref('')
+const donateOpen = ref(false)
 
 const username = computed(() => usernameFromHandle(String(route.params.handle ?? '')))
 const isOwnChannel = computed(() => Boolean(channel.value) && user.username === username.value)
@@ -145,7 +147,17 @@ watch(
             <p class="channel-handle">
               @{{ channel.username }} · {{ videoCountLabel }}
             </p>
-            <FollowButton :username="channel.username" />
+            <div class="hero-actions">
+              <FollowButton :username="channel.username" />
+              <button
+                v-if="user.logged_in && !isOwnChannel"
+                type="button"
+                class="donate-button"
+                @click="donateOpen = true"
+              >
+                ◆ Donar
+              </button>
+            </div>
           </div>
         </section>
 
@@ -235,6 +247,12 @@ watch(
         </section>
       </template>
     </main>
+
+    <DonationModal
+      v-if="donateOpen"
+      :recipient-username="username"
+      @close="donateOpen = false"
+    />
   </div>
 </template>
 
@@ -292,6 +310,32 @@ watch(
 .channel-handle {
   color: #8f8d9f;
   font-size: 0.86rem;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+}
+
+.donate-button {
+  padding: 0.55rem 0.95rem;
+  border: 1px solid #6c63ff;
+  border-radius: 0.55rem;
+  background: #6c63ff;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 750;
+  white-space: nowrap;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.donate-button:hover {
+  background: #7c75ff;
+  transform: translateY(-1px);
 }
 
 .section-heading {

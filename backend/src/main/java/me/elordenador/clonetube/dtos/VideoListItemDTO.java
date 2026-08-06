@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class VideoListItemDTO {
     private String key;
-    private Integer size;
+    private Long size;
     private String last_modified;
     private String original_filename;
 }

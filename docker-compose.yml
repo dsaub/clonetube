@@ -65,6 +65,14 @@ services:
       JWT_SECRET: ${JWT_SECRET:-cambiar-por-clave-segura-de-al-menos-32-byts}
       SQS_QUEUE_URL: ${SQS_QUEUE_URL:-}
       DOMAIN: ${DOMAIN:-http://localhost}
+      POINTS_SUCCESS_URL: ${POINTS_SUCCESS_URL:-http://localhost/points/success}
+      POINTS_CANCEL_URL: ${POINTS_CANCEL_URL:-http://localhost/points/cancel}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_BASE_URL: ${STRIPE_BASE_URL:-https://api.stripe.com}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      PAYPAL_BASE_URL: ${PAYPAL_BASE_URL:-https://api-m.sandbox.paypal.com}
     depends_on:
       mariadb:
         condition: service_healthy

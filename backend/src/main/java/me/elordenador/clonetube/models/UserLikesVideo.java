@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 @AllArgsConstructor
 @RequiredArgsConstructor
 @Entity
+@IdClass(UserLikesVideoId.class)
 @Table(name = "user_likes_video")
 public class UserLikesVideo {
     @Id

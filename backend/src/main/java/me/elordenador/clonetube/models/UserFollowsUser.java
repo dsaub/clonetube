@@ -12,6 +12,7 @@ import java.util.Date;
 @AllArgsConstructor
 @RequiredArgsConstructor
 @Entity
+@IdClass(UserFollowsUserId.class)
 @Table(name = "user_follows_user")
 public class UserFollowsUser {
     @Id

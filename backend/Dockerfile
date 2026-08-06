@@ -6,7 +6,8 @@ COPY src ./src
 RUN mvn -q package -DskipTests
 
 FROM eclipse-temurin:25-jre-alpine
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -S app && adduser -S app -G app \
+    && apk add --no-cache ffmpeg
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 USER app

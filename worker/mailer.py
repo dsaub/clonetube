@@ -11,6 +11,8 @@ def send_email(message: EmailMessage) -> None:
     email["To"] = str(message.to)
     email["Subject"] = message.subject
     email.set_content(message.body)
+    if message.body_html:
+        email.add_alternative(message.body_html, subtype="html")
     ssl_context = ssl.create_default_context()
     with smtplib.SMTP_SSL(
         host = settings.smtp_host,

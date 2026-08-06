@@ -28,5 +28,6 @@ public class Video {
     private String video_desc;
     private Date created_at;
     private Boolean is_published;
+    @Enumerated(EnumType.STRING)
     private VisibilityEnum visibility;
 }
