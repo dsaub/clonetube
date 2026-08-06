@@ -20,10 +20,13 @@ public interface VideoRepository extends JpaRepository<Video, Integer> {
 
     List<Video> findAllByAuthorId(Integer authorId);
 
-    List<Video> findAllByAuthorIdOrderByCreatedAtDescIdDesc(Integer authorId, Pageable pageable);
+    @Query("select v from Video v where v.author.id = :authorId order by v.created_at desc, v.id desc")
+    List<Video> findAllByAuthorIdOrderByCreatedAtDescIdDesc(@Param("authorId") Integer authorId, Pageable pageable);
 
+    @Query("select v from Video v where v.author.id = :authorId and v.visibility = :visibility "
+            + "order by v.created_at desc, v.id desc")
     List<Video> findAllByAuthorIdAndVisibilityOrderByCreatedAtDescIdDesc(
-            Integer authorId, VisibilityEnum visibility, Pageable pageable);
+            @Param("authorId") Integer authorId, @Param("visibility") VisibilityEnum visibility, Pageable pageable);
 
     long countByAuthorId(Integer authorId);
 

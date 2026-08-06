@@ -21,12 +21,12 @@ class FeedRankerTest {
     private static final int OTHER_AUTHOR = 2;
     private static final int THIRD_AUTHOR = 3;
 
-    private static FeedCandidate candidate(int authorId, double hoursAgo, long likes, int videoId) {
+    private static FeedCandidate candidate(int authorId, double hoursAgo, int videoId, long likes) {
         return new FeedCandidate(videoId, authorId, NOW.minus((long) (hoursAgo * 3600), ChronoUnit.SECONDS), likes);
     }
 
     private static FeedCandidate candidate(int authorId, double hoursAgo, int videoId) {
-        return candidate(authorId, hoursAgo, 0, videoId);
+        return candidate(authorId, hoursAgo, videoId, 0);
     }
 
     // ---------- recency ----------

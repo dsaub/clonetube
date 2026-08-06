@@ -30,6 +30,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -187,11 +188,12 @@ class VideoServiceTest {
         VideoDetailDTO detail = service.detail(anyAuth("bob"), "videos/abc.mp4");
         assertEquals("private", detail.getVisibility());
 
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
         assertEquals("private", service.detail(anyAuth("alice"), "videos/abc.mp4").getVisibility());
     }
 
     private org.springframework.security.core.Authentication anyAuth(String username) {
-        return new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(username, null);
+        return new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(username, null, List.of());
     }
 
     // ---------- stream-url ----------
@@ -210,6 +212,7 @@ class VideoServiceTest {
     void streamUrl_private_includes_token() {
         when(videoRepository.findByFilename("videos/abc.mp4"))
                 .thenReturn(Optional.of(video(VisibilityEnum.PRIVATE, author)));
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
 
         StreamUrlResponseDTO result = service.streamUrl(anyAuth("alice"), "jwt-secreto", "videos/abc.mp4");
 
@@ -268,7 +271,7 @@ class VideoServiceTest {
     void updateVideo_rejects_unknown_allowed_users() {
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
         when(videoRepository.findById(1)).thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
-        when(userRepository.findAllByUsernameIn(List.of("nadie"))).thenReturn(List.of());
+        when(userRepository.findAllByUsernameIn(anyCollection())).thenReturn(List.of());
 
         VideoUpdateDTO body = new VideoUpdateDTO("Título", "", "private", List.of("nadie"));
         ResponseStatusException e = assertThrows(ResponseStatusException.class,
@@ -278,7 +281,6 @@ class VideoServiceTest {
 
     @Test
     void updateVideo_only_author_can_edit() {
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
         when(videoRepository.findById(1)).thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
         when(userRepository.findByUsername("bob")).thenReturn(Optional.of(
                 User.builder().id(2).username("bob").password_version(0).build()));
