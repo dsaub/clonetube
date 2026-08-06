@@ -34,10 +34,10 @@ async function submit() {
 </script>
 
 <template>
-  <TvModalShell labelledby="donation-title" :max-width="'30rem'">
+  <TvModalShell :labelledby="done ? 'donation-done-title' : 'donation-title'" :max-width="'30rem'">
     <span class="signal-label">CH 06 · DONACIÓN</span>
     <template v-if="done">
-      <h2 id="donation-title">¡Gracias!</h2>
+      <h2 id="donation-done-title">¡Gracias!</h2>
       <p class="donation-copy">
         Tu donación ha llegado a <strong>@{{ recipientUsername }}</strong>.
       </p>
