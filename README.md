@@ -1,6 +1,6 @@
 # Clonetube
 
-Clon de YouTube construido con **Vue 3 + FastAPI**. Subida de videos con multipart upload a S3/MinIO, desplegable con Docker Compose.
+Clon de YouTube construido con **Vue 3 + Spring Boot**. Subida de videos con multipart upload a Amazon S3, desplegable con Docker Compose.
 
 ## Stack
 
@@ -8,8 +8,8 @@ Clon de YouTube construido con **Vue 3 + FastAPI**. Subida de videos con multipa
 |---|---|
 | Frontend | Vue 3, TypeScript, Vite, Pinia, Vue Router |
 | Backend | Springboot 4.0.5 |
-| Almacenamiento | MinIO (S3-compatible) |
-| Base de datos | MariaDB 11 |
+| Almacenamiento | Amazon S3 |
+| Base de datos | Base de datos externa compatible con MariaDB |
 | Proxy | nginx (HTTPS con SSL termination) |
 | Despliegue | Docker Compose, GitHub Actions |
 
@@ -20,6 +20,11 @@ Clon de YouTube construido con **Vue 3 + FastAPI**. Subida de videos con multipa
 - [Python](https://www.python.org/) >= 3.14 + [uv](https://docs.astral.sh/uv/) — solo desarrollo local
 
 ## Inicio rapido (Docker Compose)
+
+Configura `AWS_BUCKET_NAME`, `SPRING_DATASOURCE_URL`,
+`SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD` en el entorno. Las
+credenciales de AWS pueden proporcionarse mediante variables de entorno o un rol
+IAM.
 
 ```bash
 cd deploy/
@@ -32,7 +37,6 @@ La aplicacion estara disponible en `https://localhost`.
 - **Frontend**: `https://localhost`
 - **API**: `https://localhost/api/v1/`
 - **Swagger**: `https://localhost/api/v1/docs`
-- **Consola MinIO**: `http://localhost:9001` (minioadmin / minioadmin)
 
 ## Desarrollo local
 
