@@ -60,7 +60,7 @@ class UserServiceTest {
     void follow_is_idempotent_and_blocks_self_follow() {
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(me));
         when(userRepository.findByUsername("bob")).thenReturn(Optional.of(target));
-        when(followsRepository.existsByFollowerIdAndFollowedId(1, 2)).thenReturn(false);
+        when(followsRepository.existsByFollowerIdAndFollowedId(1, 2)).thenReturn(false, true);
         when(followsRepository.countByFollowedId(2)).thenReturn(1L);
 
         FollowStateDTO state = service.follow("alice", "bob");
@@ -103,7 +103,7 @@ class UserServiceTest {
         when(followsRepository.countByFollowerId(2)).thenReturn(3L);
 
         when(videoRepository.countByAuthorId(2)).thenReturn(7L);
-        ChannelDTO own = service.channel("bob", authOf(me));
+        ChannelDTO own = service.channel("bob", authOf(target));
         assertEquals(7, own.getVideo_count());
 
         when(videoRepository.countByAuthorIdAndVisibility(2, VisibilityEnum.PUBLIC)).thenReturn(2L);
@@ -131,6 +131,6 @@ class UserServiceTest {
 
     private org.springframework.security.core.Authentication authOf(User user) {
         return new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                user.getUsername(), null);
+                user.getUsername(), null, List.of());
     }
 }

@@ -1,4 +1,4 @@
--- V2__points_system.sql
+-- V3__points_system.sql
 -- Sistema de puntuacion: compra de puntos (Stripe/PayPal), donaciones y retiradas.
 
 ALTER TABLE points_history

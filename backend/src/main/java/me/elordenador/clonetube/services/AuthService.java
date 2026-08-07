@@ -259,7 +259,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password too long");
         }
 
-        User user = userRepository.findByPassword_reset_token_hash(body.getToken())
+        User user = userRepository.findByPasswordResetTokenHash(body.getToken())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid reset token"));
 
         if (user.getPassword_reset_expires_at() != null) {
