@@ -1,4 +1,4 @@
--- V3__automatic_withdrawals.sql
+-- V4__automatic_withdrawals.sql
 -- Retiradas automaticas: se registra el proveedor, el destino y el id de payout
 -- para ejecutar el pago de euros directamente sin intervencion manual.
 
