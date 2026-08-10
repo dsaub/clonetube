@@ -191,7 +191,7 @@ watch(
               v-for="video in videos"
               :key="video.id"
               class="video-card"
-              :to="{ name: 'watch', query: { key: video.key, title: video.title } }"
+              :to="{ name: 'watch', query: { id: video.id } }"
               :aria-label="`Reproducir ${video.title}`"
             >
               <div class="video-cover">

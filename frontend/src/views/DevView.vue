@@ -23,8 +23,8 @@ async function fetchVideos() {
   }
 }
 
-function watchVideo(key: string) {
-  window.open(`/watch?key=${encodeURIComponent(key)}`, '_blank')
+function watchVideo(id: string) {
+  window.open(`/watch?id=${encodeURIComponent(id)}`, '_blank')
 }
 
 function formatSize(bytes: number): string {
@@ -136,7 +136,7 @@ onMounted(() => {
           v-for="video in videos"
           :key="video.key"
           class="video-card"
-          @click="watchVideo(video.key)"
+          @click="watchVideo(video.id)"
         >
           <div class="card-thumb">
             <div class="thumb-placeholder">▶</div>

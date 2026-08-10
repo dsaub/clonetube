@@ -55,10 +55,10 @@ interface VideoService {
     suspend fun catalog(): VideoCatalogResponse
 
     @GET("api/v1/video/detail")
-    suspend fun detail(@Query("key") key: String): VideoDetailDto
+    suspend fun detail(@Query("id") id: String): VideoDetailDto
 
     @GET("api/v1/video/stream-url")
-    suspend fun streamUrl(@Query("key") key: String): StreamUrlResponse
+    suspend fun streamUrl(@Query("id") id: String): StreamUrlResponse
 
     @GET("api/v1/video/studio")
     suspend fun studio(): StudioVideoResponse

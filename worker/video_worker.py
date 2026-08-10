@@ -1,0 +1,120 @@
+import json
+import logging
+import signal
+import threading
+import time
+from types import FrameType
+from typing import Any
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+from pydantic import ValidationError
+
+from models import VideoTranscodeMessage
+from transcoder import VideoTranscoder
+from video_settings import settings
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger("video-worker")
+running = True
+
+sqs_client = boto3.client("sqs", region_name=settings.aws_region)
+s3_client = boto3.client(
+    "s3",
+    region_name=settings.aws_region,
+    endpoint_url=settings.s3_endpoint_url,
+)
+transcoder = VideoTranscoder(
+    s3_client,
+    settings.aws_bucket_name,
+    settings.transcode_timeout_seconds,
+    settings.max_video_bytes,
+)
+
+
+def stop_worker(signum: int, frame: FrameType | None) -> None:
+    global running
+    logger.info("Señal %s recibida; no se aceptarán más trabajos", signum)
+    running = False
+
+
+class VisibilityHeartbeat:
+    def __init__(self, receipt_handle: str):
+        self.receipt_handle = receipt_handle
+        self.stopped = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stopped.set()
+        self.thread.join(timeout=2)
+
+    def _run(self) -> None:
+        while not self.stopped.wait(settings.visibility_heartbeat_seconds):
+            try:
+                sqs_client.change_message_visibility(
+                    QueueUrl=settings.video_queue_url,
+                    ReceiptHandle=self.receipt_handle,
+                    VisibilityTimeout=settings.visibility_timeout,
+                )
+            except Exception:
+                logger.exception("No se pudo ampliar la visibilidad del trabajo activo")
+
+
+def parse_message(raw_body: str) -> VideoTranscodeMessage:
+    return VideoTranscodeMessage.model_validate(json.loads(raw_body))
+
+
+def process_sqs_message(sqs_message: dict[str, Any]) -> None:
+    receipt_handle = sqs_message["ReceiptHandle"]
+    try:
+        job = parse_message(sqs_message["Body"])
+    except (json.JSONDecodeError, ValidationError) as error:
+        logger.error("Trabajo inválido message_id=%s error=%s", sqs_message.get("MessageId"), error)
+        return
+
+    logger.info("Procesando transcodificación id=%s video_id=%s key=%s", job.id, job.video_id, job.source_key)
+    try:
+        with VisibilityHeartbeat(receipt_handle):
+            variants = transcoder.process(job)
+    except Exception:
+        logger.exception("Falló la transcodificación id=%s; SQS reintentará el trabajo", job.id)
+        return
+
+    sqs_client.delete_message(QueueUrl=settings.video_queue_url, ReceiptHandle=receipt_handle)
+    logger.info("Trabajo completado id=%s variants=%s", job.id, variants)
+
+
+def poll_messages() -> list[dict[str, Any]]:
+    response = sqs_client.receive_message(
+        QueueUrl=settings.video_queue_url,
+        MaxNumberOfMessages=1,
+        WaitTimeSeconds=settings.wait_time_seconds,
+        VisibilityTimeout=settings.visibility_timeout,
+        MessageSystemAttributeNames=["ApproximateReceiveCount", "SentTimestamp"],
+    )
+    return response.get("Messages", [])
+
+
+def main() -> None:
+    signal.signal(signal.SIGTERM, stop_worker)
+    signal.signal(signal.SIGINT, stop_worker)
+    logger.info("Worker de vídeo iniciado queue=%s bucket=%s", settings.video_queue_url, settings.aws_bucket_name)
+    while running:
+        try:
+            for message in poll_messages():
+                process_sqs_message(message)
+        except (BotoCoreError, ClientError):
+            logger.exception("Error comunicándose con AWS")
+            time.sleep(5)
+        except Exception:
+            logger.exception("Error inesperado en el worker")
+            time.sleep(5)
+    logger.info("Worker de vídeo detenido")
+
+
+if __name__ == "__main__":
+    main()

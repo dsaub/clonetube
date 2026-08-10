@@ -78,8 +78,8 @@ public class VideoController {
     }
 
     @GetMapping("/detail")
-    public VideoDetailDTO detail(Authentication auth, @RequestParam String key) {
-        return videoService.detail(auth, key);
+    public VideoDetailDTO detail(Authentication auth, @RequestParam Integer id) {
+        return videoService.detail(auth, id);
     }
 
     @GetMapping("/studio")
@@ -105,11 +105,11 @@ public class VideoController {
 
     @GetMapping("/stream-url")
     public StreamUrlResponseDTO streamUrl(Authentication auth,
-                                          @RequestHeader(value = "Authorization", required = false) String authorization,
-                                          @RequestParam String key) {
+                                           @RequestHeader(value = "Authorization", required = false) String authorization,
+                                           @RequestParam Integer id) {
         String token = authorization != null && authorization.startsWith("Bearer ")
                 ? authorization.substring(7) : null;
-        return videoService.streamUrl(auth, token, key);
+        return videoService.streamUrl(auth, token, id);
     }
 
     @GetMapping("/stream")

@@ -385,8 +385,8 @@ class ClonetubeAppState(context: Context? = null) {
 
     private suspend fun loadWatch(item: VideoItem) {
         try {
-            val detail = runCatching { videoRepo?.detail(item.key) }.getOrNull() ?: item
-            val url = runCatching { videoRepo?.streamUrl(item.key) }.getOrNull().orEmpty()
+            val detail = runCatching { videoRepo?.detail(item.id) }.getOrNull() ?: item
+            val url = runCatching { videoRepo?.streamUrl(item.id) }.getOrNull().orEmpty()
             watchItem = detail
             watchStreamUrl = url.ifBlank { null }
             otherVideos = (homeVideos + subsVideos)

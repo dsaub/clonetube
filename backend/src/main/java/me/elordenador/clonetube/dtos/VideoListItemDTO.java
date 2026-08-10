@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class VideoListItemDTO {
+    private Integer id;
     private String key;
     private Long size;
     private String last_modified;

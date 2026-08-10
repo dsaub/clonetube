@@ -146,9 +146,9 @@ describe('getStreamUrl', () => {
       json: () => Promise.resolve({ url: 'https://stream.example.com/video.mp4', key: 'videos/abc' }),
     })
 
-    const url = await getStreamUrl('videos/abc')
+    const url = await getStreamUrl('42')
     expect(url).toBe('https://stream.example.com/video.mp4')
-    expect(mockFetch).toHaveBeenCalledWith('/api/v1/video/stream-url?key=videos%2Fabc')
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/video/stream-url?id=42')
   })
 
   it('throws on error response', async () => {
@@ -157,7 +157,7 @@ describe('getStreamUrl', () => {
       text: () => Promise.resolve('Server error'),
     })
 
-    await expect(getStreamUrl('videos/abc')).rejects.toThrow('Error al obtener URL de streaming')
+    await expect(getStreamUrl('42')).rejects.toThrow('Error al obtener URL de streaming')
   })
 })
 

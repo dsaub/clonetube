@@ -1,34 +1,34 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getAccessibleVideoMetadataByKey, getStreamUrl, type VideoMetadata } from '@/api/video'
+import { getAccessibleVideoMetadataById, getStreamUrl, type VideoMetadata } from '@/api/video'
 import VideoPlayer from '@/components/VideoPlayer.vue'
 import FollowButton from '@/components/FollowButton.vue'
 import { channelPath } from '@/api/channel'
 
 const route = useRoute()
 
-const videoKey = ref('')
+const videoId = ref('')
 const streamUrl = ref('')
 const title = ref('')
 const metadata = ref<VideoMetadata | null>(null)
 const loading = ref(true)
 const error = ref('')
 
-function getKeyFromRoute(): string {
-  return (route.query.key as string) || ''
+function getIdFromRoute(): string {
+  return (route.query.id as string) || ''
 }
 
 async function loadVideo() {
-  const key = getKeyFromRoute()
-  if (!key) {
-    error.value = 'No se especificó ningún video (parámetro ?key=)'
+  const id = getIdFromRoute()
+  if (!/^\d+$/.test(id)) {
+    error.value = 'No se especificó ningún video válido (parámetro ?id=)'
     loading.value = false
     return
   }
 
-  videoKey.value = key
-  title.value = (route.query.title as string) || key.split('/').pop() || 'Video'
+  videoId.value = id
+  title.value = 'Video'
   metadata.value = null
   loading.value = true
   error.value = ''
@@ -36,8 +36,8 @@ async function loadVideo() {
   try {
     const token = localStorage.getItem('token') || undefined
     const [url, details] = await Promise.all([
-      getStreamUrl(key, token),
-      getAccessibleVideoMetadataByKey(key, token).catch(() => null),
+      getStreamUrl(id, token),
+      getAccessibleVideoMetadataById(id, token).catch(() => null),
     ])
     streamUrl.value = url
     metadata.value = details
@@ -49,7 +49,7 @@ async function loadVideo() {
   }
 }
 
-watch(() => route.query.key, () => {
+watch(() => route.query.id, () => {
   loadVideo()
 })
 
@@ -63,7 +63,7 @@ onMounted(() => {
     <!-- Header -->
     <header class="watch-header">
       <RouterLink to="/" class="back-link">← Inicio</RouterLink>
-      <h1 v-if="videoKey" class="video-title">
+      <h1 v-if="videoId" class="video-title">
         {{ title }}
       </h1>
     </header>

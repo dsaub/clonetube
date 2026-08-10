@@ -21,7 +21,7 @@ function videosPage(page: number, total = TOTAL_VIDEOS) {
   const count = Math.max(Math.min(total - start, pageSize), 0)
   return {
     videos: Array.from({ length: count }, (_, index) => ({
-      id: `video-${start + index + 1}`,
+      id: String(start + index + 1),
       key: `videos/${start + index + 1}.mp4`,
       title: `Vídeo ${start + index + 1}`,
       description: '',
@@ -205,6 +205,6 @@ describe('ChannelView', () => {
     const { wrapper } = await mountChannel()
 
     const link = wrapper.find('a.video-card')
-    expect(link.attributes('href')).toContain('/watch?key=videos/1.mp4')
+    expect(link.attributes('href')).toBe('/watch?id=1')
   })
 })

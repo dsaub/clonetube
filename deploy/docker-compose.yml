@@ -7,15 +7,15 @@ services:
       AWS_REGION: ${AWS_REGION:-eu-west-3}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-clonetube}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
-      # Opcional. Ni la subida ni la reproducción la necesitan: los fragmentos
-      # y el vídeo van por /api/v1/video/upload-chunk y /api/v1/video/stream.
-      # Sólo afecta a /sign-chunk, que entrega URLs prefirmadas al navegador.
+      # Base pública opcional para servir vídeos públicos (por ejemplo, CloudFront).
+      # Debe incluir cualquier prefijo anterior a la clave del objeto, sin bucket implícito.
       S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-}
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mariadb://mariadb:3306/clonetube}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-clonetube}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-password}
       JWT_SECRET: ${JWT_SECRET:-cambiar-por-clave-segura-de-al-menos-32-byts}
       SQS_QUEUE_URL: ${SQS_QUEUE_URL:-}
+      VIDEO_TRANSCODE_QUEUE_URL: ${VIDEO_TRANSCODE_QUEUE_URL:?VIDEO_TRANSCODE_QUEUE_URL is required}
       DOMAIN: ${DOMAIN:-http://localhost}
       POINTS_SUCCESS_URL: ${POINTS_SUCCESS_URL:-${DOMAIN}/points/success}
       POINTS_CANCEL_URL: ${POINTS_CANCEL_URL:-${DOMAIN}/points/cancel}
@@ -55,6 +55,22 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM: ${SMTP_FROM}
       QUEUE_URL: ${SQS_QUEUE_URL}
+      AWS_REGION: ${AWS_REGION:-eu-west-3}
     depends_on:
       - backend
+    restart: unless-stopped
+
+  video-worker:
+    image: ghcr.io/dsaub/clonetube-worker:latest
+    command: ["python", "video_worker.py"]
+    environment:
+      VIDEO_QUEUE_URL: ${VIDEO_TRANSCODE_QUEUE_URL}
+      AWS_REGION: ${AWS_REGION:-eu-west-3}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-clonetube}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      VISIBILITY_TIMEOUT: ${VIDEO_VISIBILITY_TIMEOUT:-900}
+      VISIBILITY_HEARTBEAT_SECONDS: ${VIDEO_VISIBILITY_HEARTBEAT_SECONDS:-60}
+      TRANSCODE_TIMEOUT_SECONDS: ${VIDEO_TRANSCODE_TIMEOUT_SECONDS:-21600}
+      MAX_VIDEO_BYTES: ${MAX_VIDEO_BYTES:-107374182400}
+    stop_grace_period: 30m
     restart: unless-stopped

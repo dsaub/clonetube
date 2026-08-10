@@ -44,7 +44,7 @@ clonetube/
 │   │   ├── components/         # Header, VideoPlayer, FollowButton, UploadModal, Tv*
 │   │   └── __tests__/          # Vitest + Vue Test Utils + jsdom
 │   └── Dockerfile              # Node build multi-stage + Caddy distroless
-├── worker/                     # Worker Python: consume SQS y envia emails SMTP
+├── worker/                     # Workers Python: correo SMTP y variantes de vídeo desde SQS/S3
 │   ├── main.py                 # Polling SQS + signal handling
 │   ├── mailer.py               # Envio via smtplib
 │   ├── models.py               # EmailMessage (Pydantic)
@@ -64,7 +64,7 @@ clonetube/
 └── AGENTS.md
 ```
 
-El proyecto **clonetube** es un clon de YouTube: frontend web (Vue 3), API (Spring Boot), app Android (Compose), un worker de emails (Python/SQS) y despliegue con Docker Compose + nginx HTTPS. `backend.old/` es el backend Python legado, sin uso.
+El proyecto **clonetube** es un clon de YouTube: frontend web (Vue 3), API (Spring Boot), app Android (Compose), workers de correo y vídeo (Python/SQS) y despliegue con Docker Compose + nginx HTTPS. `backend.old/` es el backend Python legado, sin uso.
 
 ---
 
@@ -119,9 +119,10 @@ API REST con **Spring Boot 4.0.7** sobre **Java 25**, gestionada con **Maven**. 
 | `JWT_SECRET` | `security.jwt.secret` |
 | `AWS_REGION` | `aws.sqs.region` |
 | `SQS_QUEUE_URL` | `aws.sqs.queue-url` |
+| `VIDEO_TRANSCODE_QUEUE_URL` | `aws.sqs.video-queue-url` |
 | `AWS_BUCKET_NAME` | `aws.s3.bucket` |
 | `S3_ENDPOINT_URL` | `aws.s3.endpoint` |
-| `S3_PUBLIC_ENDPOINT_URL` (opcional) | `aws.s3.public-endpoint` |
+| `S3_PUBLIC_ENDPOINT_URL` (opcional) | `aws.s3.public-endpoint`, base pública/CDN para leer vídeos públicos |
 | `DOMAIN` | `domain` |
 
 `spring.jpa.hibernate.ddl-auto=validate` (el esquema lo gestiona Flyway, `V1__initial_version.sql`).
@@ -265,7 +266,12 @@ Build multi-stage: **node:24-slim + pnpm** compila y descarga Caddy v2.9.1 estat
 
 ## Worker (`worker/`)
 
-Worker Python independiente que consume mensajes de **SQS** y envia emails por **SMTP** (smtplib).
+La misma imagen Python ejecuta dos consumidores independientes sobre colas SQS separadas:
+
+- `main.py`: consume mensajes de correo y los envia por SMTP.
+- `video_worker.py`: descarga originales de S3, valida con ffprobe y genera variantes MP4 H.264/AAC de 1080p, 720p, 480p, 360p y 120p.
+
+El worker de vídeo admite como fuente máxima 4K a 30 fps, 1080p/720p a 60 fps y resoluciones inferiores a 30 fps. Está preparado para ejecutarse en EC2 mediante instance profile, sin credenciales AWS estáticas.
 
 - `main.py`: loop de polling con `visibility_timeout`/`wait_time_seconds` (20s long-polling), manejo de señales (SIGTERM/SIGINT) para parada limpia, borrado de mensajes tras enviar.
 - `mailer.py`: `send_email` por SMTP con SSL.
@@ -319,10 +325,11 @@ Genera certificados autofirmados (RSA 2048, 365 dias, SAN `localhost` + `127.0.0
 | `AWS_REGION` | us-east-1 (prod: eu-west-3) | Region |
 | `AWS_BUCKET_NAME` | clonetube | Bucket S3 |
 | `S3_ENDPOINT_URL` | http://minio:9000 | Endpoint S3 |
-| `S3_PUBLIC_ENDPOINT_URL` | http://localhost:9000 (prod: vacio) | Solo para `/sign-chunk` |
+| `S3_PUBLIC_ENDPOINT_URL` | vacio (prod: URL de CloudFront) | Base pública/CDN para leer vídeos públicos |
 | `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | jdbc:mariadb://mariadb:3306/clonetube / clonetube / password | Conexion BD del backend |
 | `JWT_SECRET` | cambiar-por-clave-segura... | Firma JWT |
 | `SQS_QUEUE_URL` | (vacio) | Cola SQS del worker |
+| `VIDEO_TRANSCODE_QUEUE_URL` | (vacio) | Cola SQS dedicada a trabajos de vídeo |
 | `DOMAIN` | http://localhost | Dominio publico |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` | — | SMTP del worker (prod) |
 | `QUEUE_URL` | — | Cola del worker (prod) |

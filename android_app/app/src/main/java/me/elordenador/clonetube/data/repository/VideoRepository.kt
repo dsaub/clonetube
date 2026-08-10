@@ -25,11 +25,11 @@ class VideoRepository(private val service: VideoService) {
 
     suspend fun catalog(): List<VideoItem> = service.catalog().videos.map { it.toDomain() }
 
-    suspend fun detail(key: String): VideoItem = service.detail(key).toDomain()
+    suspend fun detail(id: String): VideoItem = service.detail(id).toDomain()
 
     /** Resolves the relative stream URL from the backend into an absolute one. */
-    suspend fun streamUrl(key: String): String {
-        val relative = service.streamUrl(key).url
+    suspend fun streamUrl(id: String): String {
+        val relative = service.streamUrl(id).url
         return if (relative.startsWith("http")) {
             relative
         } else {

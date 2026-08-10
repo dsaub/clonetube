@@ -10,6 +10,7 @@ Clon de YouTube construido con **Vue 3 + Spring Boot**. Subida de videos con mul
 | Backend | Springboot 4.0.5 |
 | Almacenamiento | Amazon S3 |
 | Base de datos | Base de datos externa compatible con MariaDB |
+| Workers | Python, SQS, SMTP y FFmpeg/ffprobe |
 | Proxy | nginx (HTTPS con SSL termination) |
 | Despliegue | Docker Compose, GitHub Actions |
 
@@ -21,10 +22,14 @@ Clon de YouTube construido con **Vue 3 + Spring Boot**. Subida de videos con mul
 
 ## Inicio rapido (Docker Compose)
 
-Configura `AWS_BUCKET_NAME`, `SPRING_DATASOURCE_URL`,
+Configura `AWS_BUCKET_NAME`, `VIDEO_TRANSCODE_QUEUE_URL`, `SPRING_DATASOURCE_URL`,
 `SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD` en el entorno. Las
 credenciales de AWS pueden proporcionarse mediante variables de entorno o un rol
 IAM.
+
+El worker de vídeo se ejecuta de forma independiente con
+`docker compose up -d video-worker`. En EC2 usa el instance profile para acceder
+directamente a SQS y S3; no necesita claves AWS estáticas.
 
 ```bash
 cd deploy/

@@ -30,7 +30,7 @@ describe('WatchView.vue', () => {
       json: () => Promise.resolve({ url: 'https://stream.example.com/video.mp4', key: 'videos/abc' }),
     })
 
-    const router = await createRouterWithQuery({ key: 'videos/abc' })
+    const router = await createRouterWithQuery({ id: '42' })
     const wrapper = mount(WatchView, {
       global: { plugins: [router, createPinia()] },
     })
@@ -44,7 +44,7 @@ describe('WatchView.vue', () => {
       json: () => Promise.resolve({ url: 'https://stream.example.com/video.mp4', key: 'videos/abc' }),
     })
 
-    const router = await createRouterWithQuery({ key: 'videos/abc' })
+    const router = await createRouterWithQuery({ id: '42' })
     const wrapper = mount(WatchView, {
       global: { plugins: [router, createPinia()] },
     })
@@ -64,7 +64,7 @@ describe('WatchView.vue', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          id: 'video-1',
+          id: '42',
           key: 'videos/abc',
           title: 'Una emisión especial',
           description: 'Descripción del contenido.',
@@ -74,7 +74,7 @@ describe('WatchView.vue', () => {
         }),
       })
 
-    const router = await createRouterWithQuery({ key: 'videos/abc' })
+    const router = await createRouterWithQuery({ id: '42' })
     const wrapper = mount(WatchView, {
       global: { plugins: [router, createPinia()] },
     })
@@ -87,7 +87,7 @@ describe('WatchView.vue', () => {
     expect(wrapper.text()).toContain('@daniel')
   })
 
-  it('shows error when no key is provided', async () => {
+  it('shows error when no id is provided', async () => {
     const router = await createRouterWithQuery({})
     const wrapper = mount(WatchView, {
       global: { plugins: [router, createPinia()] },
@@ -101,7 +101,7 @@ describe('WatchView.vue', () => {
   it('shows error when stream URL fetch fails', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Not found'))
 
-    const router = await createRouterWithQuery({ key: 'videos/abc' })
+    const router = await createRouterWithQuery({ id: '42' })
     const wrapper = mount(WatchView, {
       global: { plugins: [router, createPinia()] },
     })

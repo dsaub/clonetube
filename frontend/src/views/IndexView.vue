@@ -209,7 +209,7 @@ onMounted(loadVideos)
           <article v-for="video in filteredVideos" :key="video.key" class="video-card">
             <RouterLink
               class="video-link"
-              :to="{ name: 'watch', query: { key: video.key, title: video.title } }"
+              :to="{ name: 'watch', query: { id: video.id } }"
               :aria-label="`Reproducir ${video.title}`"
             >
               <div class="video-cover">

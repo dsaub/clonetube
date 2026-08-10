@@ -10,7 +10,11 @@ RUN uv sync --no-dev --no-build --locked
 
 FROM python:3.14-alpine 
 
-RUN adduser -D -u 10001 app
+RUN apk add --no-cache ffmpeg \
+    && ffmpeg -version >/dev/null \
+    && ffprobe -version >/dev/null \
+    && ffmpeg -hide_banner -encoders 2>&1 | grep -q libx264 \
+    && adduser -D -u 10001 app
 
 WORKDIR /app
 

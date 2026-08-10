@@ -81,8 +81,7 @@ async function remove(video: VideoDraft) {
 
 async function copyLink(video: VideoDraft) {
   const url = new URL('/watch', window.location.origin)
-  url.searchParams.set('key', video.key)
-  url.searchParams.set('title', video.title)
+  url.searchParams.set('id', video.id)
   try {
     await navigator.clipboard.writeText(url.toString())
     notice.value = 'Enlace copiado.'
@@ -164,7 +163,7 @@ watch(() => user.token?.access_token, (token) => {
               <div class="video-summary">
                 <RouterLink
                   class="thumbnail"
-                  :to="{ name: 'watch', query: { key: video.key, title: video.title } }"
+                  :to="{ name: 'watch', query: { id: video.id } }"
                   :aria-label="`Ver ${video.title}`"
                 ><span>▶</span></RouterLink>
                 <div>

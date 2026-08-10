@@ -1,6 +1,7 @@
 const API = '/api/v1/video'
 
 export interface VideoListItem {
+  id: string
   key: string
   size: number
   last_modified: string
@@ -37,7 +38,6 @@ export interface StudioVideoItem extends VideoListItem {
 }
 
 export interface VideoCatalogItem extends VideoListItem {
-  id: string | null
   title: string
   description: string
   author: VideoAuthor | null
@@ -123,7 +123,7 @@ export async function listVideosWithMetadata(): Promise<VideoCatalogItem[]> {
     const details = metadataByKey.get(video.key)
     return {
       ...video,
-      id: details?.id ?? null,
+      id: details?.id ?? video.id,
       title: details?.title || video.original_filename,
       description: details?.description ?? '',
       author: details?.author ?? null,
@@ -136,11 +136,11 @@ export async function getVideoMetadataByKey(key: string): Promise<VideoMetadata 
   return videos.find((video) => video.filename === key) ?? null
 }
 
-export async function getAccessibleVideoMetadataByKey(
-  key: string,
+export async function getAccessibleVideoMetadataById(
+  id: string,
   token?: string,
 ): Promise<VideoMetadata> {
-  const params = new URLSearchParams({ key })
+  const params = new URLSearchParams({ id })
   const response = await fetch(`${API}/detail?${params}`, { headers: withBearer(token) })
   if (!response.ok) throw errorMessage(response, 'Error al obtener los datos del video')
   const video = await response.json() as {
@@ -193,8 +193,8 @@ export async function updateVideoMetadataByKey(
   }
 }
 
-export async function getStreamUrl(key: string, token?: string): Promise<string> {
-  const params = new URLSearchParams({ key })
+export async function getStreamUrl(id: string, token?: string): Promise<string> {
+  const params = new URLSearchParams({ id })
   const response = token
     ? await fetch(`${API}/stream-url?${params}`, { headers: withBearer(token) })
     : await fetch(`${API}/stream-url?${params}`)

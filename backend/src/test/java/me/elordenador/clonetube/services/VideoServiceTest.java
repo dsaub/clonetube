@@ -43,7 +43,7 @@ class VideoServiceTest {
     @Mock UserCanViewVideoRepository userCanViewVideoRepository;
     @Mock UserRepository userRepository;
     @Mock S3Client s3Client;
-    @Mock VideoProcessor videoProcessor;
+    @Mock VideoTranscodePublisher videoTranscodePublisher;
     @Mock JwtDecoder jwtDecoder;
 
     VideoService service;
@@ -54,8 +54,9 @@ class VideoServiceTest {
     void setUp() {
         service = new VideoService(videoRepository, multipartUploadRepository, userFollowsUserRepository,
                 userLikesVideoRepository, userCanViewVideoRepository, userRepository,
-                s3Client, videoProcessor, jwtDecoder);
+                s3Client, videoTranscodePublisher, jwtDecoder);
         ReflectionTestUtils.setField(service, "bucket", "test-bucket");
+        ReflectionTestUtils.setField(service, "publicEndpoint", "");
     }
 
     private Video video(VisibilityEnum visibility, User owner) {
@@ -147,12 +148,13 @@ class VideoServiceTest {
     // ---------- complete-multipart ----------
 
     @Test
-    void completeMultipart_sorts_parts_creates_video_and_triggers_transcode() {
+    void completeMultipart_sorts_parts_creates_video_and_queues_transcode() {
         when(multipartUploadRepository.findByUploadIdAndUploadKey("u1", "videos/abc.mp4"))
                 .thenReturn(Optional.of(pendingUpload("videos/abc.mp4")));
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
         when(s3Client.completeMultipartUpload(any(CompleteMultipartUploadRequest.class)))
-                .thenReturn(CompleteMultipartUploadResponse.builder().location("http://s3/abc.mp4").build());
+                .thenReturn(CompleteMultipartUploadResponse.builder()
+                        .location("http://s3/abc.mp4").eTag("source-etag").build());
 
         CompleteMultipartRequestDTO body = new CompleteMultipartRequestDTO(
                 "videos/abc.mp4", "u1",
@@ -160,7 +162,7 @@ class VideoServiceTest {
         CompleteMultipartResponseDTO result = service.completeMultipart("alice", body);
 
         assertEquals("success", result.getStatus());
-        verify(videoProcessor).transcodeAndReplace("videos/abc.mp4", "pelicula.mp4");
+        verify(videoTranscodePublisher).enqueue(null, "videos/abc.mp4", "source-etag", "pelicula.mp4");
         ArgumentCaptor<CompleteMultipartUploadRequest> s3Captor = ArgumentCaptor.forClass(CompleteMultipartUploadRequest.class);
         verify(s3Client).completeMultipartUpload(s3Captor.capture());
         assertEquals(List.of(1, 2), s3Captor.getValue().multipartUpload().parts().stream()
@@ -171,25 +173,43 @@ class VideoServiceTest {
         assertEquals("pelicula.mp4", videoCaptor.getValue().getVideo_name());
     }
 
+    @Test
+    void completeMultipart_keeps_pending_job_when_sqs_is_unavailable() {
+        MultipartUpload upload = pendingUpload("videos/abc.mp4");
+        when(multipartUploadRepository.findByUploadIdAndUploadKey("u1", "videos/abc.mp4"))
+                .thenReturn(Optional.of(upload));
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
+        when(s3Client.completeMultipartUpload(any(CompleteMultipartUploadRequest.class)))
+                .thenReturn(CompleteMultipartUploadResponse.builder().eTag("source-etag").build());
+        doThrow(new IllegalStateException("SQS unavailable")).when(videoTranscodePublisher)
+                .enqueue(any(), any(), any(), any());
+
+        CompleteMultipartResponseDTO result = service.completeMultipart("alice", new CompleteMultipartRequestDTO(
+                "videos/abc.mp4", "u1", List.of(new PartInfoDTO(1, "etag"))));
+
+        assertEquals("success", result.getStatus());
+        assertEquals("transcode_pending", upload.getStatus());
+    }
+
     // ---------- acceso ----------
 
     @Test
     void detail_private_only_author_or_allowed() {
         Video privateVideo = video(VisibilityEnum.PRIVATE, author);
-        when(videoRepository.findByFilename("videos/abc.mp4")).thenReturn(Optional.of(privateVideo));
+        when(videoRepository.findById(1)).thenReturn(Optional.of(privateVideo));
 
-        assertThrows(ResponseStatusException.class, () -> service.detail(null, "videos/abc.mp4"));
+        assertThrows(ResponseStatusException.class, () -> service.detail(null, 1));
 
         when(userRepository.findByUsername("bob")).thenReturn(Optional.of(
                 User.builder().id(2).username("bob").password_version(0).build()));
-        assertThrows(ResponseStatusException.class, () -> service.detail(anyAuth("bob"), "videos/abc.mp4"));
+        assertThrows(ResponseStatusException.class, () -> service.detail(anyAuth("bob"), 1));
 
         when(userCanViewVideoRepository.existsByUserIdAndVideoId(2, 1)).thenReturn(true);
-        VideoDetailDTO detail = service.detail(anyAuth("bob"), "videos/abc.mp4");
+        VideoDetailDTO detail = service.detail(anyAuth("bob"), 1);
         assertEquals("private", detail.getVisibility());
 
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
-        assertEquals("private", service.detail(anyAuth("alice"), "videos/abc.mp4").getVisibility());
+        assertEquals("private", service.detail(anyAuth("alice"), 1).getVisibility());
     }
 
     private org.springframework.security.core.Authentication anyAuth(String username) {
@@ -200,21 +220,34 @@ class VideoServiceTest {
 
     @Test
     void streamUrl_public_omits_token() {
-        when(videoRepository.findByFilename("videos/abc.mp4"))
+        when(videoRepository.findById(1))
                 .thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
 
-        StreamUrlResponseDTO result = service.streamUrl(null, "jwt-secreto", "videos/abc.mp4");
+        StreamUrlResponseDTO result = service.streamUrl(null, "jwt-secreto", 1);
 
         assertFalse(result.getUrl().contains("token="));
+        assertTrue(result.getUrl().startsWith("/api/v1/video/stream?"));
+    }
+
+    @Test
+    void streamUrl_public_uses_configured_public_endpoint() {
+        ReflectionTestUtils.setField(service, "publicEndpoint", " https://cdn.example.com/media/ ");
+        when(videoRepository.findById(1))
+                .thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
+
+        StreamUrlResponseDTO result = service.streamUrl(null, null, 1);
+
+        assertEquals("https://cdn.example.com/media/videos/abc.mp4", result.getUrl());
     }
 
     @Test
     void streamUrl_private_includes_token() {
-        when(videoRepository.findByFilename("videos/abc.mp4"))
+        ReflectionTestUtils.setField(service, "publicEndpoint", "https://cdn.example.com");
+        when(videoRepository.findById(1))
                 .thenReturn(Optional.of(video(VisibilityEnum.PRIVATE, author)));
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
 
-        StreamUrlResponseDTO result = service.streamUrl(anyAuth("alice"), "jwt-secreto", "videos/abc.mp4");
+        StreamUrlResponseDTO result = service.streamUrl(anyAuth("alice"), "jwt-secreto", 1);
 
         assertTrue(result.getUrl().contains("token=jwt-secreto"));
         assertTrue(result.getUrl().startsWith("/api/v1/video/stream?"));

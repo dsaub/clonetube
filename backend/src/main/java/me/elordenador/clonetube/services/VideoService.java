@@ -22,6 +22,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.UriUtils;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import software.amazon.awssdk.core.ResponseInputStream;
@@ -34,11 +35,13 @@ import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadResponse;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.model.UploadPartResponse;
 
@@ -57,6 +60,7 @@ public class VideoService {
     private static final int MAX_CHUNK_BYTES = 32 * 1024 * 1024;
     private static final int STREAM_CHUNK_BYTES = 1024 * 1024;
     private static final int MAX_FEED_LIMIT = 200;
+    private static final List<String> TRANSCODE_VARIANTS = List.of("1080p", "720p", "480p", "360p", "120p");
 
     private final VideoRepository videoRepository;
     private final MultipartUploadRepository multipartUploadRepository;
@@ -65,17 +69,20 @@ public class VideoService {
     private final UserCanViewVideoRepository userCanViewVideoRepository;
     private final UserRepository userRepository;
     private final S3Client s3Client;
-    private final VideoProcessor videoProcessor;
+    private final VideoTranscodePublisher videoTranscodePublisher;
     private final JwtDecoder jwtDecoder;
 
     @Value("${aws.s3.bucket}")
     private String bucket;
 
+    @Value("${aws.s3.public-endpoint:}")
+    private String publicEndpoint;
+
     // ---------- Subida multipart ----------
 
     @Transactional
     public StartMultipartResponseDTO startMultipart(String username, String original_filename) {
-        if (!VideoProcessor.isValidVideoExtension(original_filename)) {
+        if (!VideoFormatValidator.isValidVideoExtension(original_filename)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Formato de archivo no permitido: " + original_filename);
         }
@@ -141,7 +148,7 @@ public class VideoService {
                             .multipartUpload(CompletedMultipartUpload.builder().parts(parts).build())
                             .build());
 
-            upload.setStatus("completed");
+            upload.setStatus("transcode_pending");
             multipartUploadRepository.save(upload);
 
             User author = requireUser(username);
@@ -155,7 +162,14 @@ public class VideoService {
             video.setVisibility(VisibilityEnum.PUBLIC);
             videoRepository.save(video);
 
-            videoProcessor.transcodeAndReplace(body.getFilename(), upload.getOriginal_filename());
+            try {
+                videoTranscodePublisher.enqueue(video.getId(), body.getFilename(), response.eTag(),
+                        upload.getOriginal_filename());
+                upload.setStatus("completed");
+                multipartUploadRepository.save(upload);
+            } catch (IllegalStateException e) {
+                log.warn("La subida {} está completa, pero SQS no está disponible; se reintentará", body.getFilename());
+            }
 
             return new CompleteMultipartResponseDTO("success",
                     response.location() == null ? "" : response.location(),
@@ -191,15 +205,16 @@ public class VideoService {
 
     public VideoListDTO listVideos() {
         try {
-            Set<String> publicKeys = videoRepository.findAllByVisibility(VisibilityEnum.PUBLIC)
-                    .stream().map(Video::getFilename).collect(Collectors.toSet());
+            Map<String, Integer> publicVideoIds = videoRepository.findAllByVisibility(VisibilityEnum.PUBLIC)
+                    .stream().collect(Collectors.toMap(Video::getFilename, Video::getId));
             List<VideoListItemDTO> videos = new ArrayList<>();
             s3Client.listObjectsV2Paginator(b -> b.bucket(bucket).prefix("videos/")).stream()
                     .flatMap(page -> page.contents().stream())
-                    .filter(obj -> !obj.key().endsWith("/") && publicKeys.contains(obj.key()))
+                    .filter(obj -> !obj.key().endsWith("/") && publicVideoIds.containsKey(obj.key()))
                     .forEach(obj -> {
                         String original = objectOriginalFilename(obj.key());
-                        videos.add(new VideoListItemDTO(obj.key(), obj.size(), obj.lastModified().toString(), original));
+                        videos.add(new VideoListItemDTO(publicVideoIds.get(obj.key()), obj.key(), obj.size(),
+                                obj.lastModified().toString(), original));
                     });
             VideoListDTO dto = new VideoListDTO();
             dto.setVideos(videos);
@@ -278,8 +293,8 @@ public class VideoService {
 
     // ---------- Detalle, edición, borrado ----------
 
-    public VideoDetailDTO detail(Authentication auth, String key) {
-        Video video = findAccessibleVideo(key, resolveOptionalUser(auth));
+    public VideoDetailDTO detail(Authentication auth, Integer id) {
+        Video video = findAccessibleVideo(id, resolveOptionalUser(auth));
         User author = video.getAuthor();
         return new VideoDetailDTO(video.getId(), video.getFilename(), video.getVideo_name(),
                 video.getVideo_desc(), video.getVisibility().toApi(), author.getId(),
@@ -348,14 +363,26 @@ public class VideoService {
         }
         userLikesVideoRepository.deleteByVideoId(video.getId());
         userCanViewVideoRepository.deleteByVideoId(video.getId());
-        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(video.getFilename()).build());
+        List<ObjectIdentifier> objects = new ArrayList<>();
+        objects.add(ObjectIdentifier.builder().key(video.getFilename()).build());
+        String stem = video.getFilename().substring(0, video.getFilename().lastIndexOf('.'));
+        TRANSCODE_VARIANTS.forEach(variant -> objects.add(
+                ObjectIdentifier.builder().key(stem + "/" + variant + ".mp4").build()));
+        s3Client.deleteObjects(DeleteObjectsRequest.builder().bucket(bucket)
+                .delete(Delete.builder().objects(objects).build()).build());
         videoRepository.delete(video);
     }
 
     // ---------- Streaming ----------
 
-    public StreamUrlResponseDTO streamUrl(Authentication auth, String token, String key) {
-        Video video = findAccessibleVideo(key, resolveOptionalUser(auth));
+    public StreamUrlResponseDTO streamUrl(Authentication auth, String token, Integer id) {
+        Video video = findAccessibleVideo(id, resolveOptionalUser(auth));
+        String key = video.getFilename();
+        if (video.getVisibility() == VisibilityEnum.PUBLIC && publicEndpoint != null
+                && !publicEndpoint.isBlank()) {
+            String baseUrl = publicEndpoint.strip().replaceAll("/+$", "");
+            return new StreamUrlResponseDTO(baseUrl + "/" + UriUtils.encodePath(key, StandardCharsets.UTF_8), key);
+        }
         String params = "key=" + URLEncoder.encode(key, StandardCharsets.UTF_8);
         // Un vídeo público no necesita credenciales: mantener el token fuera de la
         // URL evita que acabe en historiales, logs de proxy o enlaces compartidos.
@@ -417,6 +444,16 @@ public class VideoService {
     private Video findAccessibleVideo(String key, User viewer) {
         Video video = videoRepository.findByFilename(key)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vídeo no encontrado"));
+        return requireVideoAccess(video, viewer);
+    }
+
+    private Video findAccessibleVideo(Integer id, User viewer) {
+        Video video = videoRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vídeo no encontrado"));
+        return requireVideoAccess(video, viewer);
+    }
+
+    private Video requireVideoAccess(Video video, User viewer) {
         if (!canView(video, viewer)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Vídeo no encontrado");
         }
