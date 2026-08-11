@@ -1,18 +1,21 @@
 services:
-  # ------------------------------------------------------------------
-  # OpenTelemetry Collector (opcional — descomentar para desarrollo)
-  # Recibe spans/metrics/logs vía OTLP y los reenvía al backend
-  # configurado (Jaeger, Grafana Tempo, Datadog, etc.).
-  # ------------------------------------------------------------------
-  # otel-collector:
-  #   image: otel/opentelemetry-collector-contrib:latest
-  #   command: ["--config=/etc/otel/config.yaml"]
-  #   volumes:
-  #     - ./otel-config.yaml:/etc/otel/config.yaml:ro
-  #   ports:
-  #     - "4318:4318"   # OTLP HTTP
-  #     - "4317:4317"   # OTLP gRPC
-  #   restart: unless-stopped
+  # ==================================================================
+  # OpenTelemetry → Grafana
+  # ==================================================================
+  # Los workers envían spans directamente al endpoint OTLP de Grafana
+  # (Tempo o Grafana Cloud) sin necesidad de un collector intermedio.
+  #
+  # Configura estas variables en el .env de producción:
+  #
+  #   # Grafana Cloud (Tempo):
+  #   OTEL_EXPORTER_OTLP_ENDPOINT=https://tempo-<instance>.grafana.net:443
+  #   OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <base64(user:token)>
+  #
+  #   # Grafana auto-hospedado (Tempo):
+  #   OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+  #
+  # Si no se define OTEL_EXPORTER_OTLP_ENDPOINT, los spans no se exportan.
+  # ==================================================================
 
   worker:
     image: ghcr.io/dsaub/clonetube-worker:latest
@@ -48,6 +51,7 @@ services:
       # OpenTelemetry
       OTEL_SERVICE_NAME: clonetube-video-worker
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
       OTEL_TRACES_EXPORTER: otlp
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: otlp

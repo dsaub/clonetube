@@ -63,12 +63,34 @@ def inject_context(carrier: dict[str, str]) -> dict[str, Any]:
 _initialized = False
 
 
+def _parse_otel_headers(raw: str) -> dict[str, str]:
+    """Parse ``OTEL_EXPORTER_OTLP_HEADERS`` into a dict.
+
+    Format: ``key1=value1,key2=value2``
+    Example: ``Authorization=Basic dXNlcjpwYXNz``
+    """
+    headers: dict[str, str] = {}
+    if not raw or not raw.strip():
+        return headers
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if "=" not in pair:
+            continue
+        key, _, value = pair.partition("=")
+        headers[key.strip()] = value.strip()
+    return headers
+
+
 def init_telemetry(service_name: str) -> None:
     """Bootstrap the OpenTelemetry SDK.
 
     Reads standard env vars:
-    - ``OTEL_EXPORTER_OTLP_ENDPOINT`` – base URL for the OTLP collector
     - ``OTEL_SERVICE_NAME`` – overrides *service_name* when set
+    - ``OTEL_EXPORTER_OTLP_ENDPOINT`` – base URL for the OTLP collector
+      (e.g. ``https://tempo.example.grafana.net:443``)
+    - ``OTEL_EXPORTER_OTLP_PROTOCOL`` – ``http/protobuf`` (default) or ``http/json``
+    - ``OTEL_EXPORTER_OTLP_HEADERS`` – ``key=value`` pairs separated by commas
+      (e.g. ``Authorization=Basic dXNlcjpwYXNz`` para Grafana Cloud)
 
     If no OTLP endpoint is configured the SDK is still installed but spans
     are not exported (zero runtime overhead).
@@ -85,13 +107,27 @@ def init_telemetry(service_name: str) -> None:
 
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
     if otlp_endpoint:
+        # Ensure a clean base path: append / if missing, then v1/traces
         if not otlp_endpoint.endswith("/"):
             otlp_endpoint += "/"
-        exporter = OTLPSpanExporter(endpoint=f"{otlp_endpoint}v1/traces")
+        endpoint = f"{otlp_endpoint}v1/traces"
+
+        headers = _parse_otel_headers(
+            os.getenv("OTEL_EXPORTER_OTLP_HEADERS", "")
+        )
+
+        exporter_kwargs: dict[str, Any] = {"endpoint": endpoint}
+        if headers:
+            exporter_kwargs["headers"] = headers
+
+        exporter = OTLPSpanExporter(**exporter_kwargs)
         provider.add_span_processor(BatchSpanProcessor(exporter))
         logger.info(
             "OTel exportando a %s (service=%s)", otlp_endpoint, otel_service
         )
+        if headers:
+            safe_headers = {k: "***" for k in headers}
+            logger.debug("OTel headers: %s", safe_headers)
     else:
         logger.info(
             "OTEL_EXPORTER_OTLP_ENDPOINT no definido: spans no exportados (service=%s)",
