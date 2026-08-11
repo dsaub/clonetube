@@ -23,9 +23,4 @@ USER app
 
 EXPOSE 8080
 
-ENTRYPOINT [
-  "java",
-  "-javaagent:/opt/opentelemetry-javaagent.jar",
-  "-jar",
-  "app.jar"
-]
+ENTRYPOINT ["java", "-javaagent:/opt/opentelemetry-javaagent.jar", "-jar", "app.jar"]
