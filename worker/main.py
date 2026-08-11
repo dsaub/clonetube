@@ -6,14 +6,17 @@ from botocore.exceptions import BotoCoreError, ClientError
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from pydantic import ValidationError
 
-from clients import sqs_delete_message, sqs_receive_message
-from mailer import send_email
-from models import EmailMessage
-from settings import settings
+# ── OTel: inicializar ANTES de importar clients ────────────────
 from telemetry import extract_context, get_tracer, init_telemetry
 
 init_telemetry("clonetube-email-worker")
 tracer = get_tracer("email-worker")
+
+# Ahora los imports de clients ya encuentran el TracerProvider real
+from clients import sqs_delete_message, sqs_receive_message
+from mailer import send_email
+from models import EmailMessage
+from settings import settings
 
 logging.basicConfig(
     level = logging.INFO,
@@ -117,6 +120,13 @@ def poll_messages() -> list[dict[str, Any]]:
     )
     return response.get("Messages", [])
 def run_worker() -> None:
+    # Validar que las credenciales SMTP están configuradas
+    if not all([settings.smtp_host, settings.smtp_username, settings.smtp_password, settings.smtp_from]):
+        logger.critical(
+            "Faltan credenciales SMTP. Configura SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD y SMTP_FROM."
+        )
+        sys.exit(1)
+
     logger.info("Worker iniciado")
     logger.info("Queue URL: %s", settings.queue_url)
 
@@ -150,6 +160,17 @@ def run_worker() -> None:
     logger.info("Worker detenido correctamente")
 
 
+def _shutdown_telemetry() -> None:
+    """Flush pending spans before exit."""
+    from opentelemetry import trace as otel_trace
+
+    provider = otel_trace.get_tracer_provider()
+    try:
+        provider.force_flush(5_000)
+    except Exception:
+        pass
+
+
 def main() -> None:
     signal.signal(signal.SIGTERM, stop_worker)
     signal.signal(signal.SIGINT, stop_worker)
@@ -158,6 +179,8 @@ def main() -> None:
         run_worker()
     except KeyboardInterrupt:
         logger.info("Worker interrumpido")
+    finally:
+        _shutdown_telemetry()
     finally:
         sys.exit(0)
 

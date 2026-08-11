@@ -11,14 +11,16 @@ from botocore.exceptions import BotoCoreError, ClientError
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from pydantic import ValidationError
 
-from clients import instrumented_sqs
-from models import VideoTranscodeMessage
+# ── OTel: inicializar ANTES de importar clients ────────────────
 from telemetry import extract_context, get_tracer, init_telemetry
-from transcoder import VideoTranscoder
-from video_settings import settings
 
 init_telemetry("clonetube-video-worker")
 tracer = get_tracer("video-worker")
+
+from clients import instrumented_sqs
+from models import VideoTranscodeMessage
+from transcoder import VideoTranscoder
+from video_settings import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("video-worker")
@@ -129,17 +131,24 @@ def main() -> None:
     signal.signal(signal.SIGTERM, stop_worker)
     signal.signal(signal.SIGINT, stop_worker)
     logger.info("Worker de vídeo iniciado queue=%s bucket=%s", settings.video_queue_url, settings.aws_bucket_name)
-    while running:
+    try:
+        while running:
+            try:
+                for message in poll_messages():
+                    process_sqs_message(message)
+            except (BotoCoreError, ClientError):
+                logger.exception("Error comunicándose con AWS")
+                time.sleep(5)
+            except Exception:
+                logger.exception("Error inesperado en el worker")
+                time.sleep(5)
+    finally:
+        logger.info("Worker de vídeo detenido, enviando telemetría pendiente…")
         try:
-            for message in poll_messages():
-                process_sqs_message(message)
-        except (BotoCoreError, ClientError):
-            logger.exception("Error comunicándose con AWS")
-            time.sleep(5)
+            from opentelemetry import trace as otel_trace
+            otel_trace.get_tracer_provider().force_flush(10_000)
         except Exception:
-            logger.exception("Error inesperado en el worker")
-            time.sleep(5)
-    logger.info("Worker de vídeo detenido")
+            pass
 
 
 if __name__ == "__main__":

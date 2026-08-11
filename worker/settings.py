@@ -4,11 +4,11 @@ class Settings(BaseSettings):
     queue_url: str
     aws_region: str = "eu-west-3"
 
-    smtp_host: str
+    smtp_host: str = ""
     smtp_port: int = 465
-    smtp_username: str
-    smtp_password: str
-    smtp_from: str
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
 
     visibility_timeout: int = 60
     wait_time_seconds: int = 20

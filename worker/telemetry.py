@@ -105,16 +105,15 @@ def init_telemetry(service_name: str) -> None:
 
     provider = TracerProvider(resource=resource)
 
-    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
-    if otlp_endpoint:
-        # Ensure a clean base path: append / if missing, then v1/traces
-        if not otlp_endpoint.endswith("/"):
-            otlp_endpoint += "/"
-        endpoint = f"{otlp_endpoint}v1/traces"
+    otlp_endpoint_raw = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
+    otlp_headers_raw = os.getenv("OTEL_EXPORTER_OTLP_HEADERS", "").strip()
 
-        headers = _parse_otel_headers(
-            os.getenv("OTEL_EXPORTER_OTLP_HEADERS", "")
-        )
+    if otlp_endpoint_raw:
+        # Construir URL completa del endpoint OTLP HTTP
+        base = otlp_endpoint_raw.rstrip("/")
+        endpoint = f"{base}/v1/traces"
+
+        headers = _parse_otel_headers(otlp_headers_raw)
 
         exporter_kwargs: dict[str, Any] = {"endpoint": endpoint}
         if headers:
@@ -123,14 +122,16 @@ def init_telemetry(service_name: str) -> None:
         exporter = OTLPSpanExporter(**exporter_kwargs)
         provider.add_span_processor(BatchSpanProcessor(exporter))
         logger.info(
-            "OTel exportando a %s (service=%s)", otlp_endpoint, otel_service
+            "OTel configurado: endpoint=%s service=%s headers=%s",
+            endpoint,
+            otel_service,
+            list(headers.keys()) if headers else "(ninguno)",
         )
-        if headers:
-            safe_headers = {k: "***" for k in headers}
-            logger.debug("OTel headers: %s", safe_headers)
     else:
-        logger.info(
-            "OTEL_EXPORTER_OTLP_ENDPOINT no definido: spans no exportados (service=%s)",
+        logger.warning(
+            "⚠  OTEL_EXPORTER_OTLP_ENDPOINT NO definido — los spans NO se enviarán a ningún colector. "
+            "Define esta variable para apuntar a Grafana (ej. https://otel.elordenador.org). "
+            "service=%s",
             otel_service,
         )
 
