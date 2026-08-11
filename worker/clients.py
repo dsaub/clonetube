@@ -34,7 +34,7 @@ def _sqs_span(
 
 def sqs_receive_message(queue_url: str | None = None, **kwargs: Any) -> dict[str, Any]:
     """Instrumented SQS receive_message."""
-    url = queue_url or settings.queue_url
+    url = queue_url or kwargs.pop("QueueUrl", settings.queue_url)
     with _sqs_span("receive", url):
         return _raw_sqs.receive_message(QueueUrl=url, **kwargs)
 
