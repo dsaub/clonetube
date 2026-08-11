@@ -7,8 +7,12 @@ from fractions import Fraction
 from pathlib import Path
 
 from botocore.exceptions import ClientError
+from opentelemetry.trace import Status, StatusCode
 
 from models import VideoTranscodeMessage
+from telemetry import get_tracer
+
+tracer = get_tracer("transcoder")
 
 logger = logging.getLogger("video-worker.transcoder")
 
@@ -147,54 +151,100 @@ class VideoTranscoder:
         self.max_video_bytes = max_video_bytes
 
     def process(self, job: VideoTranscodeMessage) -> list[str]:
-        source_head = self.s3.head_object(Bucket=self.bucket, Key=job.source_key)
-        source_etag = str(source_head.get("ETag", "")).strip('"')
-        expected_etag = (job.source_etag or "").strip('"')
-        if expected_etag and expected_etag != source_etag:
-            raise UnsupportedVideoError("El objeto fuente ya no coincide con el trabajo SQS")
-        if int(source_head.get("ContentLength", 0)) > self.max_video_bytes:
-            raise UnsupportedVideoError("El vídeo supera el tamaño máximo configurado")
+        with tracer.start_as_current_span(
+            "transcode-video",
+            attributes={
+                "video.job_id": job.id,
+                "video.id": job.video_id,
+                "video.source_key": job.source_key,
+            },
+        ) as span:
+            with tracer.start_as_current_span("s3-head-source"):
+                source_head = self.s3.head_object(Bucket=self.bucket, Key=job.source_key)
+            source_etag = str(source_head.get("ETag", "")).strip('"')
+            expected_etag = (job.source_etag or "").strip('"')
+            if expected_etag and expected_etag != source_etag:
+                span.set_status(Status(StatusCode.ERROR, "Source ETag mismatch"))
+                raise UnsupportedVideoError("El objeto fuente ya no coincide con el trabajo SQS")
+            if int(source_head.get("ContentLength", 0)) > self.max_video_bytes:
+                span.set_status(Status(StatusCode.ERROR, "Video exceeds max size"))
+                raise UnsupportedVideoError("El vídeo supera el tamaño máximo configurado")
 
-        completed: list[str] = []
-        with tempfile.TemporaryDirectory(prefix="clonetube-video-") as temp_dir:
-            input_path = Path(temp_dir) / "source"
-            output_path = Path(temp_dir) / "variant.mp4"
-            self.s3.download_file(self.bucket, job.source_key, str(input_path))
-            source = probe_video(input_path, self.timeout)
-            profiles = variants_for(source)
-            logger.info(
-                "Fuente validada key=%s resolution=%sx%s fps=%.3f variants=%s",
-                job.source_key, source.width, source.height, source.fps,
-                [profile.name for profile in profiles],
-            )
+            span.set_attributes({
+                "video.source_etag": source_etag,
+                "video.source_size_bytes": source_head.get("ContentLength", 0),
+            })
 
-            for profile in profiles:
-                key = variant_key(job.source_key, profile)
-                if self._is_complete(key, source_etag, profile):
-                    logger.info("Variante ya existente, se omite key=%s", key)
-                    completed.append(key)
-                    continue
+            completed: list[str] = []
+            with tempfile.TemporaryDirectory(prefix="clonetube-video-") as temp_dir:
+                input_path = Path(temp_dir) / "source"
+                output_path = Path(temp_dir) / "variant.mp4"
 
-                output_path.unlink(missing_ok=True)
-                run_command(ffmpeg_command(input_path, output_path, source, profile), self.timeout)
-                output_probe = probe_video(output_path, self.timeout)
-                if output_probe.codec != "h264" or output_probe.resolution > profile.height + 2:
-                    raise RuntimeError(f"La variante {profile.name} no superó la validación de salida")
+                with tracer.start_as_current_span("s3-download-source"):
+                    self.s3.download_file(self.bucket, job.source_key, str(input_path))
 
-                self.s3.upload_file(
-                    str(output_path), self.bucket, key,
-                    ExtraArgs={
-                        "ContentType": "video/mp4",
-                        "Metadata": {
-                            "clonetube-profile": f"{TRANSCODE_VERSION}-{profile.name}",
-                            "source-etag": source_etag,
-                            "transcode-job-id": job.id,
-                        },
-                    },
+                with tracer.start_as_current_span("ffprobe-source"):
+                    source = probe_video(input_path, self.timeout)
+
+                profiles = variants_for(source)
+                span.set_attributes({
+                    "video.source_width": source.width,
+                    "video.source_height": source.height,
+                    "video.source_fps": source.fps,
+                    "video.source_duration_s": source.duration,
+                    "video.source_codec": source.codec,
+                    "video.variant_count": len(profiles),
+                })
+                logger.info(
+                    "Fuente validada key=%s resolution=%sx%s fps=%.3f variants=%s",
+                    job.source_key, source.width, source.height, source.fps,
+                    [profile.name for profile in profiles],
                 )
-                completed.append(key)
-                logger.info("Variante subida key=%s", key)
-        return completed
+
+                for profile in profiles:
+                    key = variant_key(job.source_key, profile)
+                    if self._is_complete(key, source_etag, profile):
+                        logger.info("Variante ya existente, se omite key=%s", key)
+                        completed.append(key)
+                        continue
+
+                    output_path.unlink(missing_ok=True)
+
+                    with tracer.start_as_current_span(
+                        "ffmpeg-transcode",
+                        attributes={
+                            "video.variant_profile": profile.name,
+                            "video.variant_height": profile.height,
+                        },
+                    ):
+                        run_command(ffmpeg_command(input_path, output_path, source, profile), self.timeout)
+
+                    with tracer.start_as_current_span("ffprobe-variant"):
+                        output_probe = probe_video(output_path, self.timeout)
+                    if output_probe.codec != "h264" or output_probe.resolution > profile.height + 2:
+                        raise RuntimeError(f"La variante {profile.name} no superó la validación de salida")
+
+                    with tracer.start_as_current_span(
+                        "s3-upload-variant",
+                        attributes={"video.variant_key": key},
+                    ):
+                        self.s3.upload_file(
+                            str(output_path), self.bucket, key,
+                            ExtraArgs={
+                                "ContentType": "video/mp4",
+                                "Metadata": {
+                                    "clonetube-profile": f"{TRANSCODE_VERSION}-{profile.name}",
+                                    "source-etag": source_etag,
+                                    "transcode-job-id": job.id,
+                                },
+                            },
+                        )
+                    completed.append(key)
+                    logger.info("Variante subida key=%s", key)
+
+            span.set_attributes({"video.completed_variants": json.dumps(completed)})
+            span.set_status(Status(StatusCode.OK))
+            return completed
 
     def _is_complete(self, key: str, source_etag: str, profile: TranscodeProfile) -> bool:
         try:

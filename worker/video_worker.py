@@ -8,17 +8,23 @@ from typing import Any
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+from opentelemetry.trace import SpanKind, Status, StatusCode
 from pydantic import ValidationError
 
+from clients import instrumented_sqs
 from models import VideoTranscodeMessage
+from telemetry import extract_context, get_tracer, init_telemetry
 from transcoder import VideoTranscoder
 from video_settings import settings
+
+init_telemetry("clonetube-video-worker")
+tracer = get_tracer("video-worker")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("video-worker")
 running = True
 
-sqs_client = boto3.client("sqs", region_name=settings.aws_region)
+sqs_client = instrumented_sqs(settings.video_queue_url, settings.aws_region)
 s3_client = boto3.client(
     "s3",
     region_name=settings.aws_region,
@@ -56,7 +62,6 @@ class VisibilityHeartbeat:
         while not self.stopped.wait(settings.visibility_heartbeat_seconds):
             try:
                 sqs_client.change_message_visibility(
-                    QueueUrl=settings.video_queue_url,
                     ReceiptHandle=self.receipt_handle,
                     VisibilityTimeout=settings.visibility_timeout,
                 )
@@ -70,27 +75,48 @@ def parse_message(raw_body: str) -> VideoTranscodeMessage:
 
 def process_sqs_message(sqs_message: dict[str, Any]) -> None:
     receipt_handle = sqs_message["ReceiptHandle"]
-    try:
-        job = parse_message(sqs_message["Body"])
-    except (json.JSONDecodeError, ValidationError) as error:
-        logger.error("Trabajo inválido message_id=%s error=%s", sqs_message.get("MessageId"), error)
-        return
+    parent_ctx = extract_context(sqs_message)
 
-    logger.info("Procesando transcodificación id=%s video_id=%s key=%s", job.id, job.video_id, job.source_key)
-    try:
-        with VisibilityHeartbeat(receipt_handle):
-            variants = transcoder.process(job)
-    except Exception:
-        logger.exception("Falló la transcodificación id=%s; SQS reintentará el trabajo", job.id)
-        return
+    with tracer.start_as_current_span(
+        "process-video-transcode",
+        kind=SpanKind.CONSUMER,
+        attributes={
+            "messaging.system": "aws-sqs",
+            "messaging.message.id": sqs_message.get("MessageId", "unknown"),
+        },
+        context=parent_ctx,
+    ) as span:
+        try:
+            job = parse_message(sqs_message["Body"])
+        except (json.JSONDecodeError, ValidationError) as error:
+            logger.error("Trabajo inválido message_id=%s error=%s", sqs_message.get("MessageId"), error)
+            span.set_status(Status(StatusCode.ERROR, "Invalid message body"))
+            return
 
-    sqs_client.delete_message(QueueUrl=settings.video_queue_url, ReceiptHandle=receipt_handle)
-    logger.info("Trabajo completado id=%s variants=%s", job.id, variants)
+        span.set_attributes({
+            "video.job_id": job.id,
+            "video.id": job.video_id,
+            "video.source_key": job.source_key,
+            "video.original_filename": job.original_filename,
+        })
+        logger.info("Procesando transcodificación id=%s video_id=%s key=%s", job.id, job.video_id, job.source_key)
+        try:
+            with VisibilityHeartbeat(receipt_handle):
+                variants = transcoder.process(job)
+        except Exception as exc:
+            logger.exception("Falló la transcodificación id=%s; SQS reintentará el trabajo", job.id)
+            span.set_status(Status(StatusCode.ERROR, "Transcode failed"))
+            span.record_exception(exc)
+            return
+
+        sqs_client.delete_message(ReceiptHandle=receipt_handle)
+        span.set_attributes({"video.variants": json.dumps(variants)})
+        span.set_status(Status(StatusCode.OK))
+        logger.info("Trabajo completado id=%s variants=%s", job.id, variants)
 
 
 def poll_messages() -> list[dict[str, Any]]:
     response = sqs_client.receive_message(
-        QueueUrl=settings.video_queue_url,
         MaxNumberOfMessages=1,
         WaitTimeSeconds=settings.wait_time_seconds,
         VisibilityTimeout=settings.visibility_timeout,

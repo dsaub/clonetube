@@ -1,4 +1,19 @@
 services:
+  # ------------------------------------------------------------------
+  # OpenTelemetry Collector (opcional — descomentar para desarrollo)
+  # Recibe spans/metrics/logs vía OTLP y los reenvía al backend
+  # configurado (Jaeger, Grafana Tempo, Datadog, etc.).
+  # ------------------------------------------------------------------
+  # otel-collector:
+  #   image: otel/opentelemetry-collector-contrib:latest
+  #   command: ["--config=/etc/otel/config.yaml"]
+  #   volumes:
+  #     - ./otel-config.yaml:/etc/otel/config.yaml:ro
+  #   ports:
+  #     - "4318:4318"   # OTLP HTTP
+  #     - "4317:4317"   # OTLP gRPC
+  #   restart: unless-stopped
+
   worker:
     image: ghcr.io/dsaub/clonetube-worker:latest
     environment:
@@ -9,6 +24,12 @@ services:
       SMTP_FROM: ${SMTP_FROM}
       QUEUE_URL: ${SQS_QUEUE_URL}
       AWS_REGION: ${AWS_REGION:-eu-west-3}
+      # OpenTelemetry
+      OTEL_SERVICE_NAME: clonetube-email-worker
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: otlp
     restart: unless-stopped
 
   video-worker:
@@ -23,5 +44,11 @@ services:
       VISIBILITY_HEARTBEAT_SECONDS: ${VIDEO_VISIBILITY_HEARTBEAT_SECONDS:-60}
       TRANSCODE_TIMEOUT_SECONDS: ${VIDEO_TRANSCODE_TIMEOUT_SECONDS:-21600}
       MAX_VIDEO_BYTES: ${MAX_VIDEO_BYTES:-107374182400}
+      # OpenTelemetry
+      OTEL_SERVICE_NAME: clonetube-video-worker
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: otlp
     stop_grace_period: 30m
     restart: unless-stopped

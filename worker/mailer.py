@@ -2,8 +2,14 @@ import smtplib
 import ssl
 from email.message import EmailMessage as SMTPMessage
 
+from opentelemetry.trace import Status, StatusCode
+
 from models import EmailMessage
 from settings import settings
+from telemetry import get_tracer
+
+tracer = get_tracer("mailer")
+
 
 def send_email(message: EmailMessage) -> None:
     email = SMTPMessage()
@@ -13,15 +19,27 @@ def send_email(message: EmailMessage) -> None:
     email.set_content(message.body)
     if message.body_html:
         email.add_alternative(message.body_html, subtype="html")
+
     ssl_context = ssl.create_default_context()
-    with smtplib.SMTP_SSL(
-        host = settings.smtp_host,
-        port = settings.smtp_port,
-        context=ssl_context,
-        timeout=30
-    ) as smtp:
-        smtp.login(
-            settings.smtp_username,
-            settings.smtp_password
-        )
-        smtp.send_message(email)
+    with tracer.start_as_current_span(
+        "smtp-send",
+        attributes={
+            "email.id": message.id,
+            "email.to": str(message.to),
+            "messaging.system": "smtp",
+        },
+    ) as span:
+        try:
+            with smtplib.SMTP_SSL(
+                host=settings.smtp_host,
+                port=settings.smtp_port,
+                context=ssl_context,
+                timeout=30,
+            ) as smtp:
+                smtp.login(settings.smtp_username, settings.smtp_password)
+                smtp.send_message(email)
+        except Exception as exc:
+            span.set_status(Status(StatusCode.ERROR, "SMTP send failed"))
+            span.record_exception(exc)
+            raise
+        span.set_status(Status(StatusCode.OK))
