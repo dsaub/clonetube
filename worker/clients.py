@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any
 
 import boto3
@@ -92,10 +90,10 @@ def instrumented_sqs(queue_url: str, region_name: str | None = None) -> Any:
         sqs.raw.<any_other_method>(...)       # raw, no instrumentation
     """
     region = region_name or __import__("os").getenv("AWS_REGION", "eu-west-3")
-    raw = boto3.client("sqs", region_name=region)
+    _raw = boto3.client("sqs", region_name=region)
 
     class _Instrumented:
-        raw = raw
+        raw = _raw
 
         @staticmethod
         def receive_message(**kw: Any) -> dict[str, Any]:
@@ -108,7 +106,7 @@ def instrumented_sqs(queue_url: str, region_name: str | None = None) -> Any:
                     "messaging.destination": queue_url,
                 },
             ):
-                return raw.receive_message(QueueUrl=queue_url, **kw)
+                return _raw.receive_message(QueueUrl=queue_url, **kw)
 
         @staticmethod
         def delete_message(**kw: Any) -> dict[str, Any]:
@@ -121,7 +119,7 @@ def instrumented_sqs(queue_url: str, region_name: str | None = None) -> Any:
                     "messaging.destination": queue_url,
                 },
             ):
-                return raw.delete_message(QueueUrl=queue_url, **kw)
+                return _raw.delete_message(QueueUrl=queue_url, **kw)
 
         @staticmethod
         def change_message_visibility(**kw: Any) -> dict[str, Any]:
@@ -134,6 +132,6 @@ def instrumented_sqs(queue_url: str, region_name: str | None = None) -> Any:
                     "messaging.destination": queue_url,
                 },
             ):
-                return raw.change_message_visibility(QueueUrl=queue_url, **kw)
+                return _raw.change_message_visibility(QueueUrl=queue_url, **kw)
 
     return _Instrumented()
