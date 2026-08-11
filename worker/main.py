@@ -181,7 +181,6 @@ def main() -> None:
         logger.info("Worker interrumpido")
     finally:
         _shutdown_telemetry()
-    finally:
         sys.exit(0)
 
 

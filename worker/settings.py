@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    queue_url: str
+    queue_url: str = ""
     aws_region: str = "eu-west-3"
 
     smtp_host: str = ""

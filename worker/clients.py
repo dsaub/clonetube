@@ -1,19 +1,43 @@
+from __future__ import annotations
+
 from typing import Any
 
 import boto3
 from opentelemetry.trace import SpanKind
 
-from settings import settings
 from telemetry import get_tracer
 
 tracer = get_tracer("sqs-client")
 
-_raw_sqs = boto3.client("sqs", region_name=settings.aws_region)
+# ── Lazy init: solo se instancia si las funciones standalone lo necesitan ──
+_raw_sqs: Any = None
+_settings: Any = None
+
+
+def _get_raw_sqs():
+    global _raw_sqs
+    if _raw_sqs is None:
+        from settings import settings as _s
+
+        _raw_sqs = boto3.client("sqs", region_name=_s.aws_region)
+    return _raw_sqs
+
+
+def _get_email_settings():
+    global _settings
+    if _settings is None:
+        from settings import settings as _s
+
+        _settings = _s
+    return _settings
+
+
+# ── Funciones standalone (usadas solo por el worker de correo) ──
 
 
 def sqs_receive_message(queue_url: str | None = None, **kwargs: Any) -> dict[str, Any]:
     """Instrumented SQS receive_message."""
-    url = queue_url or kwargs.pop("QueueUrl", settings.queue_url)
+    url = queue_url or kwargs.pop("QueueUrl", _get_email_settings().queue_url)
     with tracer.start_as_current_span(
         "sqs-receive",
         kind=SpanKind.CLIENT,
@@ -23,12 +47,12 @@ def sqs_receive_message(queue_url: str | None = None, **kwargs: Any) -> dict[str
             "messaging.destination": url,
         },
     ):
-        return _raw_sqs.receive_message(QueueUrl=url, **kwargs)
+        return _get_raw_sqs().receive_message(QueueUrl=url, **kwargs)
 
 
 def sqs_delete_message(queue_url: str | None = None, **kwargs: Any) -> dict[str, Any]:
     """Instrumented SQS delete_message."""
-    url = queue_url or kwargs.pop("QueueUrl", settings.queue_url)
+    url = queue_url or kwargs.pop("QueueUrl", _get_email_settings().queue_url)
     with tracer.start_as_current_span(
         "sqs-delete",
         kind=SpanKind.CLIENT,
@@ -38,12 +62,12 @@ def sqs_delete_message(queue_url: str | None = None, **kwargs: Any) -> dict[str,
             "messaging.destination": url,
         },
     ):
-        return _raw_sqs.delete_message(QueueUrl=url, **kwargs)
+        return _get_raw_sqs().delete_message(QueueUrl=url, **kwargs)
 
 
 def sqs_change_message_visibility(queue_url: str | None = None, **kwargs: Any) -> dict[str, Any]:
     """Instrumented SQS change_message_visibility (heartbeat)."""
-    url = queue_url or kwargs.pop("QueueUrl", settings.queue_url)
+    url = queue_url or kwargs.pop("QueueUrl", _get_email_settings().queue_url)
     with tracer.start_as_current_span(
         "sqs-change-visibility",
         kind=SpanKind.CLIENT,
@@ -53,11 +77,7 @@ def sqs_change_message_visibility(queue_url: str | None = None, **kwargs: Any) -
             "messaging.destination": url,
         },
     ):
-        return _raw_sqs.change_message_visibility(QueueUrl=url, **kwargs)
-
-
-# Backwards-compatible raw client for advanced usage
-sqs_client = _raw_sqs
+        return _get_raw_sqs().change_message_visibility(QueueUrl=url, **kwargs)
 
 
 def instrumented_sqs(queue_url: str, region_name: str | None = None) -> Any:
@@ -71,7 +91,7 @@ def instrumented_sqs(queue_url: str, region_name: str | None = None) -> Any:
         sqs.change_message_visibility(...)    # instrumented
         sqs.raw.<any_other_method>(...)       # raw, no instrumentation
     """
-    region = region_name or settings.aws_region
+    region = region_name or __import__("os").getenv("AWS_REGION", "eu-west-3")
     raw = boto3.client("sqs", region_name=region)
 
     class _Instrumented:
