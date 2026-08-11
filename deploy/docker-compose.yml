@@ -32,7 +32,7 @@ services:
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
       OTEL_TRACES_EXPORTER: otlp
       OTEL_METRICS_EXPORTER: otlp
-      OTEL_LOGS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: otlp
     restart: unless-stopped
 
   frontend:
