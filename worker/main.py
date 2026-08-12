@@ -9,6 +9,11 @@ from pydantic import ValidationError
 # ── OTel: inicializar ANTES de importar clients ────────────────
 from telemetry import extract_context, get_tracer, init_telemetry
 
+# Configure logging before telemetry so exporter diagnostics are visible.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 init_telemetry("clonetube-email-worker")
 tracer = get_tracer("email-worker")
 
@@ -17,11 +22,6 @@ from clients import sqs_delete_message, sqs_receive_message
 from mailer import send_email
 from models import EmailMessage
 from settings import settings
-
-logging.basicConfig(
-    level = logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
 
 logger = logging.getLogger("email-worker")
 

@@ -88,6 +88,8 @@ def init_telemetry(service_name: str) -> None:
     - ``OTEL_SERVICE_NAME`` – overrides *service_name* when set
     - ``OTEL_EXPORTER_OTLP_ENDPOINT`` – base URL for the OTLP collector
       (e.g. ``https://tempo.example.grafana.net:443``)
+    - ``OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`` – optional complete traces URL;
+      takes precedence over the base endpoint
     - ``OTEL_EXPORTER_OTLP_PROTOCOL`` – ``http/protobuf`` (default) or ``http/json``
     - ``OTEL_EXPORTER_OTLP_HEADERS`` – ``key=value`` pairs separated by commas
       (e.g. ``Authorization=Basic dXNlcjpwYXNz`` para Grafana Cloud)
@@ -106,12 +108,14 @@ def init_telemetry(service_name: str) -> None:
     provider = TracerProvider(resource=resource)
 
     otlp_endpoint_raw = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
+    traces_endpoint_raw = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "").strip()
     otlp_headers_raw = os.getenv("OTEL_EXPORTER_OTLP_HEADERS", "").strip()
 
-    if otlp_endpoint_raw:
-        # Construir URL completa del endpoint OTLP HTTP
-        base = otlp_endpoint_raw.rstrip("/")
-        endpoint = f"{base}/v1/traces"
+    if traces_endpoint_raw or otlp_endpoint_raw:
+        # Accept both the standard complete traces endpoint and a collector base URL.
+        endpoint = traces_endpoint_raw or otlp_endpoint_raw.rstrip("/")
+        if not endpoint.endswith("/v1/traces"):
+            endpoint = f"{endpoint}/v1/traces"
 
         headers = _parse_otel_headers(otlp_headers_raw)
 

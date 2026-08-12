@@ -11,7 +11,10 @@ from botocore.exceptions import BotoCoreError, ClientError
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from pydantic import ValidationError
 
-# ── OTel: inicializar ANTES de importar clients ────────────────
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger("video-worker")
+
+# Initialize logging before telemetry so exporter diagnostics are visible.
 from telemetry import extract_context, get_tracer, init_telemetry
 
 init_telemetry("clonetube-video-worker")
@@ -22,8 +25,6 @@ from models import VideoTranscodeMessage
 from transcoder import VideoTranscoder
 from video_settings import settings
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger("video-worker")
 running = True
 
 sqs_client = instrumented_sqs(settings.video_queue_url, settings.aws_region)
