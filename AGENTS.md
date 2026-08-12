@@ -19,11 +19,11 @@ clonetube/
 │   ├── src/main/java/me/elordenador/clonetube/
 │   │   ├── ClonetubeApplication.java
 │   │   ├── controller/         # Auth, Video, User, Points, Health
-│   │   ├── service/            # AuthService, VideoService, UserService, PointsService
-│   │   ├── repository/         # UserRepository (Spring Data JPA)
+│   │   ├── service/            # AuthService, VideoService, UserService, PointsService, VideoTranscode*
+│   │   ├── repository/         # UserRepository, VideoRepository (Spring Data JPA)
 │   │   ├── models/             # Entidades JPA: User, Video, MultipartUpload, etc.
 │   │   ├── dtos/               # DTOs de request/response
-│   │   ├── config/             # SecurityConfig, JwtConfig, SqsConfig
+│   │   ├── config/             # SecurityConfig, JwtConfig, SqsConfig, S3Config
 │   │   ├── security/           # UserJwtAuthenticationConverter
 │   │   ├── decorators/         # @RequireAuth, @RequireAdmin
 │   │   ├── exceptions/         # ResourceNotFoundException
@@ -44,12 +44,18 @@ clonetube/
 │   │   ├── components/         # Header, VideoPlayer, FollowButton, UploadModal, Tv*
 │   │   └── __tests__/          # Vitest + Vue Test Utils + jsdom
 │   └── Dockerfile              # Node build multi-stage + Caddy distroless
-├── worker/                     # Workers Python: correo SMTP y variantes de vídeo desde SQS/S3
-│   ├── main.py                 # Polling SQS + signal handling
+├── worker/                     # Workers Python: correo SMTP y transcodificación HLS desde SQS/S3
+│   ├── main.py                 # Worker correo: polling SQS + signal handling
+│   ├── video_worker.py         # Worker vídeo: polling SQS de transcodificación
+│   ├── transcoder.py           # Rendiciones HLS (ffmpeg) + master.m3u8 + subida a S3
 │   ├── mailer.py               # Envio via smtplib
-│   ├── models.py               # EmailMessage (Pydantic)
+│   ├── models.py               # EmailMessage, VideoTranscodeMessage (Pydantic)
 │   ├── clients.py              # Cliente SQS (boto3)
-│   ├── settings.py             # Pydantic Settings
+│   ├── settings.py             # Pydantic Settings (correo)
+│   ├── video_settings.py       # Pydantic Settings (vídeo)
+│   ├── constants.py            # Perfiles de transcodificación
+│   ├── telemetry.py            # OpenTelemetry (OTLP)
+│   ├── tests/                  # Tests unittest (python -m unittest discover -s tests)
 │   └── Dockerfile
 ├── android_app/                # App Android (Kotlin + Jetpack Compose)
 │   └── app/src/main/java/me/elordenador/clonetube/
@@ -80,16 +86,20 @@ API REST con **Spring Boot 4.0.7** sobre **Java 25**, gestionada con **Maven**. 
 |---|---|
 | `ClonetubeApplication.java` | Punto de entrada Spring Boot |
 | `controller/` | 5 REST controllers (ver endpoints) |
-| `service/` | Logica de negocio: `AuthService`, `VideoService`, `UserService`, `PointsService` |
+| `service/` | Logica de negocio: `AuthService`, `VideoService`, `UserService`, `PointsService`, `VideoTranscodePublisher`, `VideoTranscodeRetryService`, `VideoCatalogRequeueService`, `VideoFormatValidator` |
 | `repository/UserRepository.java` | Spring Data JPA; incluye `findByUsername`, `findByEmail`, `findByVerifyCode` |
-| `models/` | Entidades JPA: `User`, `Video`, `UserFollowsUser`, `UserLikesVideo`, `UserCanViewVideo`, `MultipartUpload`, `PointsHistory`, `EmailMessage` |
-| `dtos/` | DTOs de request/response (auth, multipart, feed, canal, studio, puntos) |
+| `models/` | Entidades JPA: `User`, `Video`, `UserFollowsUser`, `UserLikesVideo`, `UserCanViewVideo`, `MultipartUpload`, `PointsHistory`, `EmailMessage`, `VideoTranscodeMessage` |
+| `dtos/` | DTOs de request/response (auth, multipart, feed, canal, studio, puntos, playback) |
 | `config/SecurityConfig.java` | CSRF off, stateless, `/api/v1/auth/**` permitAll, resto denyAll + JWT resource server, `@EnableMethodSecurity` |
 | `config/JwtConfig.java` | `JwtDecoder`/`JwtEncoder` HS256 a partir de `security.jwt.secret` |
 | `config/SqsConfig.java` | Bean `SqsClient` con `aws.sqs.region` |
+| `config/S3Config.java` | Bean `S3Client` (path-style para MinIO, endpoint override opcional) |
 | `security/UserJwtAuthenticationConverter.java` | Convierte el JWT en `Authentication` |
 | `decorators/` | `@RequireAuth`, `@RequireAdmin` (anotaciones custom) |
 | `db/migration/V1__initial_version.sql` | Esquema completo gestionado por Flyway |
+| `services/VideoTranscodePublisher.java` | Publica trabajos `video.transcode` en la cola SQS de vídeo |
+| `services/VideoTranscodeRetryService.java` | Reencola periódicamente cargas `transcode_pending` que fallaron |
+| `services/VideoCatalogRequeueService.java` | Migración opt-in: reencola el catálogo completo al arrancar (`VIDEO_REQUEUE_CATALOG=true`) |
 
 ### Dependencias (`pom.xml`)
 
@@ -123,6 +133,7 @@ API REST con **Spring Boot 4.0.7** sobre **Java 25**, gestionada con **Maven**. 
 | `AWS_BUCKET_NAME` | `aws.s3.bucket` |
 | `S3_ENDPOINT_URL` | `aws.s3.endpoint` |
 | `S3_PUBLIC_ENDPOINT_URL` (opcional) | `aws.s3.public-endpoint`, base pública/CDN para leer vídeos públicos |
+| `VIDEO_REQUEUE_CATALOG` (opcional) | `video.transcode.requeue-catalog` (default `false`), migración: reencola el catálogo al arrancar |
 | `DOMAIN` | `domain` |
 
 `spring.jpa.hibernate.ddl-auto=validate` (el esquema lo gestiona Flyway, `V1__initial_version.sql`).
@@ -157,9 +168,11 @@ API REST con **Spring Boot 4.0.7** sobre **Java 25**, gestionada con **Maven**. 
 | `GET` | `/detail` | Detalle de video |
 | `GET` | `/studio` | Listado del estudio del autor |
 | `PATCH` | `/{video_id}` | Actualiza video (nombre, descripcion, visibilidad...) |
-| `DELETE` | `/{video_id}` | Elimina video |
+| `DELETE` | `/{video_id}` | Elimina video y todo el prefijo `{stem}/` en S3 (variantes legacy + árbol HLS) |
 | `GET` | `/stream-url` | URL de reproduccion (`/api/v1/video/stream`) |
-| `GET` | `/stream` | Sirve el video desde S3 con soporte `Range` |
+| `GET` | `/playback` | Info de reproduccion: `{ original: {url}, hls: {masterUrl} | null }` |
+| `GET` | `/stream` | Sirve el MP4 original desde S3 con soporte `Range` (legacy `?key=`) |
+| `GET` | `/stream/{*key}` | Streaming path-based: playlists HLS y segmentos (whitelist estricta, `Range` en segmentos) |
 
 **Users** (`/api/v1/users`):
 
@@ -184,6 +197,8 @@ Tablas: `user` (username, password_hash, password_version, verify_code, points, 
 - `ClonetubeApplicationTests`: carga el contexto.
 - `AuthControllerTest`: `@WebMvcTest` con mocks (Spring Boot 4), cubre register/login con el contrato actual (`pending_confirmation`).
 - `EmailMessageTest`: modelo Pydantic del worker (portado).
+- `VideoServiceTest`: unit tests con `S3Client` mockeado (whitelist de keys HLS, 404 en keys arbitrarias, disponibilidad HLS, borrado por prefijo).
+- `VideoTranscodeRetryServiceTest` / `VideoCatalogRequeueServiceTest`: reencolado de pendientes y del catálogo con `publisher` mockeado.
 - Ejecutar: `mvn -B test` en `backend/` (funciona sin BD externa).
 
 ### Dockerfile
@@ -210,16 +225,16 @@ src/
 ├── router/index.ts          # Rutas con lazy loading
 ├── stores/user.ts           # Auth store (login, register, logout, token persistido)
 ├── composables/useTvSignOut.ts
-├── api/                     # axios clients: channel, feed, social, video
+├── api/                     # axios clients: channel, feed, social, video (incluye getPlaybackInfo)
 ├── views/
 │   ├── IndexView.vue        # Home / feed
-│   ├── WatchView.vue        # Reproductor de video
+│   ├── WatchView.vue        # Reproductor de video (consulta /playback)
 │   ├── StudioView.vue       # Estudio del autor
 │   ├── ChannelView.vue      # Pagina de canal (/channel/@usuario)
 │   └── DevView.vue          # Sandbox de multipart upload
 └── components/
     ├── Header.vue           # Header de la app
-    ├── VideoPlayer.vue      # Reproductor (stream por /api/v1/video/stream)
+    ├── VideoPlayer.vue      # hls.js (Auto/ABR + niveles) | HLS nativo Safari | MP4 progresivo
     ├── FollowButton.vue     # Boton de suscripcion
     ├── UploadModal.vue      # Modal de subida multipart por fragmentos
     ├── TvModalShell.vue     # Shell de modales estilo TV
@@ -229,10 +244,19 @@ src/
 ### Paginas
 
 - **Home** (`/`): feed de videos (`api/feed.ts`).
-- **Watch** (`/watch`): reproduccion con `VideoPlayer` + stream con `Range` (`api/video.ts`).
+- **Watch** (`/watch`): reproduccion con `VideoPlayer`; `api/video.ts` consulta `/playback` y el player elige motor HLS (si hay `hlsSrc`) o MP4 progresivo (stream con `Range`).
 - **Studio** (`/studio`): gestion de videos del autor (`/api/v1/video/studio`).
 - **Channel** (`/channel/@usuario`): ficha de canal + rejilla paginada de videos (`api/channel.ts`); si la URL llega sin arroba se reescribe.
 - **Dev** (`/dev`): sandbox de multipart upload con `UploadModal` (chunks de 5 MB via `PUT /upload-chunk`).
+
+### Reproductor y calidad (`VideoPlayer.vue`)
+
+- **Motores** (en orden): hls.js si hay `hlsSrc` y MSE disponible → HLS nativo Safari → MP4 progresivo (`src`).
+- **Menú de calidad** (⚙ en `controls-right`): `Auto` (ABR real con hls.js, `currentLevel = -1`), niveles de `hls.levels` (`{height}p` descendente) y `Original` (MP4 progresivo, preservando `currentTime`/estado).
+- **Persistencia** en `localStorage` (`clonetube-quality`); si la calidad guardada no existe en ese vídeo → `Auto`.
+- **Vídeos privados**: `xhrSetup` añade `Authorization: Bearer <token>` (hls.js sí puede enviar cabeceras).
+- **Safari iOS** (HLS nativo sin API de niveles): menú solo Auto/Original.
+- Limpieza: `hls.destroy()` al desmontar y al cambiar de vídeo.
 
 ### Dependencias
 
@@ -242,6 +266,7 @@ src/
 | `vue-router` | ^5.1.0 | runtime | Enrutamiento SPA |
 | `pinia` | ^3.0.4 | runtime | Estado global |
 | `axios` | ^1.18.1 | runtime | Cliente HTTP |
+| `hls.js` | — | runtime | Reproducción HLS con ABR (import dinámico en `VideoPlayer`) |
 | `vite` | ^8.0.16 | dev | Build tool |
 | `typescript` | ~6.0.0 | dev | Tipos |
 | `vue-tsc` | ^3.3.5 | dev | Type checking |
@@ -269,15 +294,21 @@ Build multi-stage: **node:24-slim + pnpm** compila y descarga Caddy v2.9.1 estat
 La misma imagen Python ejecuta dos consumidores independientes sobre colas SQS separadas:
 
 - `main.py`: consume mensajes de correo y los envia por SMTP.
-- `video_worker.py`: descarga originales de S3, valida con ffprobe y genera variantes MP4 H.264/AAC de 1080p, 720p, 480p, 360p y 120p.
+- `video_worker.py`: consume trabajos `video.transcode`, descarga el original de S3, valida con ffprobe y genera **rendiciones HLS** (`playlist.m3u8` + `seg_*.ts`) con ffmpeg.
 
 El worker de vídeo admite como fuente máxima 4K a 30 fps, 1080p/720p a 60 fps y resoluciones inferiores a 30 fps. Está preparado para ejecutarse en EC2 mediante instance profile, sin credenciales AWS estáticas.
 
 - `main.py`: loop de polling con `visibility_timeout`/`wait_time_seconds` (20s long-polling), manejo de señales (SIGTERM/SIGINT) para parada limpia, borrado de mensajes tras enviar.
-- `mailer.py`: `send_email` por SMTP con SSL.
-- `models.py`: `EmailMessage` (Pydantic) — el payload que publica el backend en SQS.
+- `video_worker.py`: mismo patrón de polling que `main.py` + heartbeat de visibilidad mientras transcode; borra el mensaje al completar y deja que SQS reintente si falla.
+- `transcoder.py`: por perfil (`constants.py`), ffmpeg `-f hls -hls_time 4 -hls_playlist_type vod`; sube el árbol `videos/<stem>/hls/<perfil>/` y por último el `master.m3u8` (bandwidth calculado de bytes reales ÷ duración). Metadatos S3: `clonetube-profile: hls-ts-v1`, `source-etag`, `transcode-job-id`. Idempotente: si el `master.m3u8` ya existe con el etag de la fuente, omite el trabajo.
+- `models.py`: `EmailMessage` y `VideoTranscodeMessage` (Pydantic) — payloads que publica el backend en SQS.
 - `settings.py`: `queue_url`, `aws_region`, `smtp_*`, `visibility_timeout`, `wait_time_seconds`.
-- Dockerfile propio; imagen `ghcr.io/dsaub/clonetube-worker`.
+- `video_settings.py`: `video_queue_url`, `aws_bucket_name`, timeouts de transcode y límite de tamaño fuente.
+- `telemetry.py`: OpenTelemetry (OTLP) con contexto propagado por atributos SQS.
+- Tests: `python -m unittest discover -s tests` en `worker/`.
+- Dockerfile propio (alpine + ffmpeg/libx264, usuario no root); imagen `ghcr.io/dsaub/clonetube-worker`.
+
+Los vídeos sin HLS (subidos antes de esta pipeline) se siguen reproduciendo por MP4 progresivo: `GET /playback` devuelve `hls: null` y el frontend cae al motor progresivo. Para migrarlos, arrancar el backend con `VIDEO_REQUEUE_CATALOG=true`: reencola todo el catálogo y el worker omite los que ya tienen `master.m3u8`.
 
 ---
 
@@ -328,8 +359,9 @@ Genera certificados autofirmados (RSA 2048, 365 dias, SAN `localhost` + `127.0.0
 | `S3_PUBLIC_ENDPOINT_URL` | vacio (prod: URL de CloudFront) | Base pública/CDN para leer vídeos públicos |
 | `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | jdbc:mariadb://mariadb:3306/clonetube / clonetube / password | Conexion BD del backend |
 | `JWT_SECRET` | cambiar-por-clave-segura... | Firma JWT |
-| `SQS_QUEUE_URL` | (vacio) | Cola SQS del worker |
+| `SQS_QUEUE_URL` | (vacio) | Cola SQS del worker (correo) |
 | `VIDEO_TRANSCODE_QUEUE_URL` | (vacio) | Cola SQS dedicada a trabajos de vídeo |
+| `VIDEO_REQUEUE_CATALOG` | false | Migración: reencola el catálogo completo a HLS al arrancar el backend |
 | `DOMAIN` | http://localhost | Dominio publico |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` | — | SMTP del worker (prod) |
 | `QUEUE_URL` | — | Cola del worker (prod) |
@@ -366,12 +398,15 @@ graph TD
         API[Controllers /api/v1/*] --> SVC[Services]
         SVC --> JPA[(MariaDB + Flyway)]
         SVC --> S3[(MinIO / S3)]
-        SVC -->|publica EmailMessage| SQS[(SQS)]
+        SVC -->|publica EmailMessage| SQS[(SQS correo)]
+        SVC -->|publica video.transcode| VSQS[(SQS vídeo)]
         SEC[SecurityConfig + JwtConfig] --> API
     end
 
     subgraph Worker["Worker (Python)"]
         W[SQS poller] --> M[mailer SMTP]
+        VW[Video worker] -->|ffmpeg HLS| S3
+        VSQS --> VW
     end
 
     subgraph Android["Android (Kotlin + Compose)"]
@@ -398,12 +433,15 @@ graph TD
 | Backend — API REST | Spring Boot 4.0.7, 5 controllers, ~30 endpoints | 70% |
 | Backend — Auth | JWT HS256, register/login/me, change/reset password, verify code, admin | 60% |
 | Backend — Multipart Upload | start/sign/upload/complete/cancel + stream con Range | 80% |
+| Backend — Playback | `/playback` (original + HLS), streaming path-based con whitelist, borrado por prefijo | 80% |
 | Backend — BD | JPA + Flyway (V1) sobre MariaDB | 60% |
-| Backend — Tests | H2 + WebMvcTest (auth, email model, context) | 30% |
+| Backend — Tests | H2 + WebMvcTest + unit tests S3 mockeado (video, retry, requeue) | 40% |
 | Frontend — Vistas | Index, Watch, Studio, Channel, Dev | 60% |
+| Frontend — Reproductor | hls.js con ABR + menú de calidad + persistencia (Auto/niveles/Original) | 80% |
 | Frontend — Auth store | `stores/user.ts` + api modules axios | 50% |
-| Frontend — Tests | Vitest + Test Utils (api specs, App) | 30% |
+| Frontend — Tests | Vitest + Test Utils (api specs, VideoPlayer, App) | 35% |
 | Worker — Email | SQS poller + SMTP, Dockerfile | 80% |
+| Worker — Vídeo | ffmpeg HLS por perfiles + master.m3u8 + idempotencia + tests | 85% |
 | Android — App | Compose: Auth, Home, Channel screens | 30% |
 | Deploy — Docker | Compose dev + prod, nginx HTTPS, worker | 90% |
 | CI/CD | Tests (Maven/Vitest) + build/push multi-arch ghcr.io | 85% |
@@ -432,7 +470,8 @@ graph TD
 - No incluir secretos en el codigo (variables de entorno).
 - Imagenes Docker en `ghcr.io/dsaub/clonetube-<service>` (backend, frontend, worker).
 - `backend.old/` es legado: no modificar, no usar.
+- Entorno dev: el stack local no incluye SQS ni worker; para probar transcodificación usar LocalStack/elasticmq con el worker activo o un entorno prod-like.
 
 ---
 
-*Ultima actualizacion: 2026-08-05*
+*Ultima actualizacion: 2026-08-12*
