@@ -112,10 +112,28 @@ public class VideoController {
         return videoService.streamUrl(auth, token, id);
     }
 
+    @GetMapping("/playback")
+    public PlaybackInfoDTO playback(Authentication auth,
+                                    @RequestHeader(value = "Authorization", required = false) String authorization,
+                                    @RequestParam Integer id) {
+        String token = authorization != null && authorization.startsWith("Bearer ")
+                ? authorization.substring(7) : null;
+        return videoService.playback(auth, token, id);
+    }
+
     @GetMapping("/stream")
     public ResponseEntity<StreamingResponseBody> stream(
             Authentication auth,
             @RequestParam String key,
+            @RequestParam(required = false) String token,
+            @RequestHeader(value = "Range", required = false) String range) {
+        return videoService.stream(auth, key, token, range);
+    }
+
+    @GetMapping("/stream/{*key}")
+    public ResponseEntity<StreamingResponseBody> streamPath(
+            Authentication auth,
+            @PathVariable("key") String key,
             @RequestParam(required = false) String token,
             @RequestHeader(value = "Range", required = false) String range) {
         return videoService.stream(auth, key, token, range);

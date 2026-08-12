@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -285,6 +286,222 @@ class VideoServiceTest {
 
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertNull(result.getHeaders().getFirst("Content-Range"));
+    }
+
+    // ---------- stream path-based (whitelist) ----------
+
+    private void stubPublicVideo() {
+        when(videoRepository.findByFilename("videos/abc.mp4"))
+                .thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
+    }
+
+    private void stubS3GetObject() {
+        GetObjectResponse objectResponse = GetObjectResponse.builder()
+                .contentLength(100L).contentType("application/vnd.apple.mpegurl").build();
+        when(s3Client.getObject(any(GetObjectRequest.class)))
+                .thenReturn(new ResponseInputStream<>(objectResponse, new ByteArrayInputStream(new byte[10])));
+    }
+
+    @Test
+    void streamPath_serves_hls_master() {
+        stubPublicVideo();
+        stubS3GetObject();
+
+        ResponseEntity<StreamingResponseBody> result = service.stream(null, "videos/abc/hls/master.m3u8", null, null);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        ArgumentCaptor<GetObjectRequest> captor = ArgumentCaptor.forClass(GetObjectRequest.class);
+        verify(s3Client).getObject(captor.capture());
+        assertEquals("videos/abc/hls/master.m3u8", captor.getValue().key());
+    }
+
+    @Test
+    void streamPath_serves_playlist_and_segment() {
+        stubPublicVideo();
+        stubS3GetObject();
+
+        service.stream(null, "videos/abc/hls/720p/playlist.m3u8", null, null);
+        service.stream(null, "videos/abc/hls/360p/seg_00007.ts", null, null);
+
+        ArgumentCaptor<GetObjectRequest> captor = ArgumentCaptor.forClass(GetObjectRequest.class);
+        verify(s3Client, times(2)).getObject(captor.capture());
+        assertEquals("videos/abc/hls/720p/playlist.m3u8", captor.getAllValues().get(0).key());
+        assertEquals("videos/abc/hls/360p/seg_00007.ts", captor.getAllValues().get(1).key());
+    }
+
+    @Test
+    void streamPath_serves_legacy_mp4_variant() {
+        stubPublicVideo();
+        stubS3GetObject();
+
+        service.stream(null, "videos/abc/720p.mp4", null, null);
+
+        ArgumentCaptor<GetObjectRequest> captor = ArgumentCaptor.forClass(GetObjectRequest.class);
+        verify(s3Client).getObject(captor.capture());
+        assertEquals("videos/abc/720p.mp4", captor.getValue().key());
+    }
+
+    @Test
+    void streamPath_rejects_arbitrary_key() {
+        ResponseStatusException e = assertThrows(ResponseStatusException.class,
+                () -> service.stream(null, "videos/abc/hls/secret.txt", null, null));
+        assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
+        verify(s3Client, never()).getObject(any(GetObjectRequest.class));
+    }
+
+    @Test
+    void streamPath_rejects_non_whitelisted_profile() {
+        ResponseStatusException e = assertThrows(ResponseStatusException.class,
+                () -> service.stream(null, "videos/abc/hls/9999p/playlist.m3u8", null, null));
+        assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
+        verify(s3Client, never()).getObject(any(GetObjectRequest.class));
+    }
+
+    @Test
+    void streamPath_rejects_unknown_source() {
+        when(videoRepository.findByFilename("videos/xyz.mp4")).thenReturn(Optional.empty());
+
+        assertThrows(ResponseStatusException.class,
+                () -> service.stream(null, "videos/xyz/hls/master.m3u8", null, null));
+        verify(s3Client, never()).getObject(any(GetObjectRequest.class));
+    }
+
+    @Test
+    void streamPath_enforces_access_on_canonical_video() {
+        when(videoRepository.findByFilename("videos/abc.mp4"))
+                .thenReturn(Optional.of(video(VisibilityEnum.PRIVATE, author)));
+
+        assertThrows(ResponseStatusException.class,
+                () -> service.stream(null, "videos/abc/hls/master.m3u8", null, null));
+        verify(s3Client, never()).getObject(any(GetObjectRequest.class));
+    }
+
+    @Test
+    void streamPath_accepts_query_token_for_private() {
+        when(videoRepository.findByFilename("videos/abc.mp4"))
+                .thenReturn(Optional.of(video(VisibilityEnum.PRIVATE, author)));
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
+        when(jwtDecoder.decode("jwt-secreto")).thenReturn(Jwt.withTokenValue("jwt-secreto")
+                .header("alg", "HS256").subject("alice").claim("pwd_ver", 0).build());
+        GetObjectResponse objectResponse = GetObjectResponse.builder()
+                .contentLength(10L).contentType("video/mp2t").build();
+        when(s3Client.getObject(any(GetObjectRequest.class)))
+                .thenReturn(new ResponseInputStream<>(objectResponse, new ByteArrayInputStream(new byte[10])));
+
+        ResponseEntity<StreamingResponseBody> result =
+                service.stream(null, "videos/abc/hls/720p/seg_00001.ts", "jwt-secreto", null);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+    }
+
+    // ---------- playback ----------
+
+    @Test
+    void playback_returns_proxy_urls_without_cdn() {
+        when(videoRepository.findById(1)).thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder().build());
+
+        PlaybackInfoDTO result = service.playback(null, null, 1);
+
+        assertEquals("/api/v1/video/stream?key=videos%2Fabc.mp4", result.getOriginal().getUrl());
+        assertEquals("/api/v1/video/stream/videos/abc/hls/master.m3u8", result.getHls().getMasterUrl());
+    }
+
+    @Test
+    void playback_public_uses_cdn_when_configured() {
+        ReflectionTestUtils.setField(service, "publicEndpoint", "https://cdn.example.com/media/");
+        when(videoRepository.findById(1)).thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder().build());
+
+        PlaybackInfoDTO result = service.playback(null, null, 1);
+
+        assertEquals("https://cdn.example.com/media/videos/abc.mp4", result.getOriginal().getUrl());
+        assertEquals("https://cdn.example.com/media/videos/abc/hls/master.m3u8", result.getHls().getMasterUrl());
+    }
+
+    @Test
+    void playback_hls_null_when_master_missing() {
+        when(videoRepository.findById(1)).thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
+        when(s3Client.headObject(any(HeadObjectRequest.class)))
+                .thenThrow(NoSuchKeyException.builder().build());
+
+        PlaybackInfoDTO result = service.playback(null, null, 1);
+
+        assertNull(result.getHls());
+        assertEquals("/api/v1/video/stream?key=videos%2Fabc.mp4", result.getOriginal().getUrl());
+    }
+
+    @Test
+    void playback_private_token_in_original_not_in_master() {
+        when(videoRepository.findById(1)).thenReturn(Optional.of(video(VisibilityEnum.PRIVATE, author)));
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder().build());
+
+        PlaybackInfoDTO result = service.playback(anyAuth("alice"), "jwt-secreto", 1);
+
+        assertTrue(result.getOriginal().getUrl().contains("token=jwt-secreto"));
+        assertEquals("/api/v1/video/stream/videos/abc/hls/master.m3u8", result.getHls().getMasterUrl());
+        assertFalse(result.getHls().getMasterUrl().contains("token="));
+    }
+
+    // ---------- delete ----------
+
+    @Test
+    void deleteVideo_removes_source_and_whole_prefix() {
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
+        when(videoRepository.findById(1)).thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
+        when(s3Client.listObjectsV2(any(ListObjectsV2Request.class)))
+                .thenReturn(ListObjectsV2Response.builder()
+                        .contents(S3Object.builder().key("videos/abc/hls/master.m3u8").build(),
+                                S3Object.builder().key("videos/abc/720p.mp4").build(),
+                                S3Object.builder().key("videos/abc/hls/720p/seg_00001.ts").build())
+                        .build());
+
+        service.deleteVideo("alice", "1");
+
+        verify(s3Client).deleteObject(any(DeleteObjectRequest.class));
+        ArgumentCaptor<DeleteObjectsRequest> captor = ArgumentCaptor.forClass(DeleteObjectsRequest.class);
+        verify(s3Client).deleteObjects(captor.capture());
+        List<String> keys = captor.getValue().delete().objects().stream()
+                .map(ObjectIdentifier::key).toList();
+        assertEquals(3, keys.size());
+        assertTrue(keys.contains("videos/abc/hls/master.m3u8"));
+        assertTrue(keys.contains("videos/abc/720p.mp4"));
+        assertTrue(keys.contains("videos/abc/hls/720p/seg_00001.ts"));
+        verify(videoRepository).delete(any(Video.class));
+    }
+
+    @Test
+    void deleteVideo_paginates_prefix_deletion() {
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(author));
+        when(videoRepository.findById(1)).thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
+        when(s3Client.listObjectsV2(any(ListObjectsV2Request.class)))
+                .thenReturn(ListObjectsV2Response.builder()
+                                .contents(S3Object.builder().key("videos/abc/hls/master.m3u8").build())
+                                .nextContinuationToken("next").build(),
+                        ListObjectsV2Response.builder()
+                                .contents(S3Object.builder().key("videos/abc/hls/720p/seg_00001.ts").build())
+                                .build());
+
+        service.deleteVideo("alice", "1");
+
+        verify(s3Client, times(2)).listObjectsV2(any(ListObjectsV2Request.class));
+        ArgumentCaptor<ListObjectsV2Request> listCaptor = ArgumentCaptor.forClass(ListObjectsV2Request.class);
+        verify(s3Client, times(2)).listObjectsV2(listCaptor.capture());
+        assertEquals("videos/abc/", listCaptor.getAllValues().get(0).prefix());
+        assertEquals("next", listCaptor.getAllValues().get(1).continuationToken());
+        verify(s3Client, times(2)).deleteObjects(any(DeleteObjectsRequest.class));
+    }
+
+    @Test
+    void deleteVideo_only_author_can_delete() {
+        when(videoRepository.findById(1)).thenReturn(Optional.of(video(VisibilityEnum.PUBLIC, author)));
+        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(
+                User.builder().id(2).username("bob").password_version(0).build()));
+
+        assertThrows(ResponseStatusException.class, () -> service.deleteVideo("bob", "1"));
+        verify(s3Client, never()).listObjectsV2(any(ListObjectsV2Request.class));
+        verify(videoRepository, never()).delete(any(Video.class));
     }
 
     // ---------- update ----------

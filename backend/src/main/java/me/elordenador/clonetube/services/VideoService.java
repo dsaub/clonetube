@@ -36,11 +36,14 @@ import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadResponse;
 import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.model.UploadPartResponse;
@@ -49,6 +52,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -60,7 +65,13 @@ public class VideoService {
     private static final int MAX_CHUNK_BYTES = 32 * 1024 * 1024;
     private static final int STREAM_CHUNK_BYTES = 1024 * 1024;
     private static final int MAX_FEED_LIMIT = 200;
+    private static final int MAX_DELETE_BATCH = 1000;
     private static final List<String> TRANSCODE_VARIANTS = List.of("1080p", "720p", "480p", "360p", "120p");
+    private static final String VARIANT_REGEX = String.join("|", TRANSCODE_VARIANTS);
+    private static final Pattern HLS_MASTER_PATTERN = Pattern.compile("^(.+)/hls/master\\.m3u8$");
+    private static final Pattern HLS_PLAYLIST_PATTERN = Pattern.compile("^(.+)/hls/(" + VARIANT_REGEX + ")/playlist\\.m3u8$");
+    private static final Pattern HLS_SEGMENT_PATTERN = Pattern.compile("^(.+)/hls/(" + VARIANT_REGEX + ")/seg_[0-9]+\\.ts$");
+    private static final Pattern LEGACY_VARIANT_PATTERN = Pattern.compile("^(.+)/(" + VARIANT_REGEX + ")\\.mp4$");
 
     private final VideoRepository videoRepository;
     private final MultipartUploadRepository multipartUploadRepository;
@@ -363,14 +374,31 @@ public class VideoService {
         }
         userLikesVideoRepository.deleteByVideoId(video.getId());
         userCanViewVideoRepository.deleteByVideoId(video.getId());
-        List<ObjectIdentifier> objects = new ArrayList<>();
-        objects.add(ObjectIdentifier.builder().key(video.getFilename()).build());
         String stem = video.getFilename().substring(0, video.getFilename().lastIndexOf('.'));
-        TRANSCODE_VARIANTS.forEach(variant -> objects.add(
-                ObjectIdentifier.builder().key(stem + "/" + variant + ".mp4").build()));
-        s3Client.deleteObjects(DeleteObjectsRequest.builder().bucket(bucket)
-                .delete(Delete.builder().objects(objects).build()).build());
+        deleteS3Prefix(stem + "/");
+        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(video.getFilename()).build());
         videoRepository.delete(video);
+    }
+
+    /** Borra en lotes todos los objetos S3 bajo un prefijo (variantes legacy y árboles HLS). */
+    private void deleteS3Prefix(String prefix) {
+        String continuationToken = null;
+        do {
+            ListObjectsV2Request.Builder request = ListObjectsV2Request.builder().bucket(bucket).prefix(prefix);
+            if (continuationToken != null) {
+                request.continuationToken(continuationToken);
+            }
+            ListObjectsV2Response page = s3Client.listObjectsV2(request.build());
+            List<ObjectIdentifier> objects = page.contents().stream()
+                    .map(o -> ObjectIdentifier.builder().key(o.key()).build())
+                    .toList();
+            for (int i = 0; i < objects.size(); i += MAX_DELETE_BATCH) {
+                List<ObjectIdentifier> batch = objects.subList(i, Math.min(i + MAX_DELETE_BATCH, objects.size()));
+                s3Client.deleteObjects(DeleteObjectsRequest.builder().bucket(bucket)
+                        .delete(Delete.builder().objects(batch).build()).build());
+            }
+            continuationToken = page.nextContinuationToken();
+        } while (continuationToken != null);
     }
 
     // ---------- Streaming ----------
@@ -378,18 +406,27 @@ public class VideoService {
     public StreamUrlResponseDTO streamUrl(Authentication auth, String token, Integer id) {
         Video video = findAccessibleVideo(id, resolveOptionalUser(auth));
         String key = video.getFilename();
-        if (video.getVisibility() == VisibilityEnum.PUBLIC && publicEndpoint != null
-                && !publicEndpoint.isBlank()) {
-            String baseUrl = publicEndpoint.strip().replaceAll("/+$", "");
-            return new StreamUrlResponseDTO(baseUrl + "/" + UriUtils.encodePath(key, StandardCharsets.UTF_8), key);
+        return new StreamUrlResponseDTO(buildStreamUrl(video, key, token), key);
+    }
+
+    public PlaybackInfoDTO playback(Authentication auth, String token, Integer id) {
+        User viewer = resolveOptionalUser(auth);
+        if (viewer == null) {
+            viewer = userFromQueryToken(token);
         }
-        String params = "key=" + URLEncoder.encode(key, StandardCharsets.UTF_8);
-        // Un vídeo público no necesita credenciales: mantener el token fuera de la
-        // URL evita que acabe en historiales, logs de proxy o enlaces compartidos.
-        if (video.getVisibility() != VisibilityEnum.PUBLIC && token != null && !token.isBlank()) {
-            params += "&token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+        Video video = findAccessibleVideo(id, viewer);
+        String sourceKey = video.getFilename();
+        String stem = sourceKey.substring(0, sourceKey.lastIndexOf('.'));
+        String masterKey = stem + "/hls/master.m3u8";
+
+        PlaybackSourceDTO original = new PlaybackSourceDTO(buildStreamUrl(video, sourceKey, token));
+        PlaybackHlsDTO hls = null;
+        if (s3ObjectExists(masterKey)) {
+            // Para privados el JWT viaja en cabecera Authorization (hls.js sí puede enviarla,
+            // a diferencia de <video>); por eso el master nunca lleva token en la URL.
+            hls = new PlaybackHlsDTO(buildStreamUrl(video, masterKey, null));
         }
-        return new StreamUrlResponseDTO("/api/v1/video/stream?" + params, key);
+        return new PlaybackInfoDTO(original, hls);
     }
 
     public ResponseEntity<StreamingResponseBody> stream(Authentication auth, String key, String token, String range) {
@@ -397,8 +434,11 @@ public class VideoService {
         if (viewer == null) {
             viewer = userFromQueryToken(token);
         }
-        Video video = findAccessibleVideo(key, viewer);
+        resolveStreamVideo(key, viewer);
+        return streamObject(key, range);
+    }
 
+    private ResponseEntity<StreamingResponseBody> streamObject(String key, String range) {
         GetObjectRequest.Builder request = GetObjectRequest.builder().bucket(bucket).key(key);
         if (range != null && !range.isBlank()) {
             request.range(range);
@@ -410,7 +450,7 @@ public class VideoService {
             response = obj.response();
             bodyStream = obj;
         } catch (Exception e) {
-            log.warn("No se pudo leer el vídeo {} del almacenamiento: {}", video.getId(), e.getMessage());
+            log.warn("No se pudo leer el vídeo {} del almacenamiento: {}", key, e.getMessage());
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Vídeo no encontrado");
         }
 
@@ -439,12 +479,66 @@ public class VideoService {
         return ResponseEntity.status(status).headers(headers).body(body);
     }
 
+    /** CDN directo si público y configurado; si no, rutas proxy (path-based para HLS, ?key= para MP4). */
+    private String buildStreamUrl(Video video, String key, String token) {
+        if (video.getVisibility() == VisibilityEnum.PUBLIC && publicEndpoint != null
+                && !publicEndpoint.isBlank()) {
+            String baseUrl = publicEndpoint.strip().replaceAll("/+$", "");
+            return baseUrl + "/" + UriUtils.encodePath(key, StandardCharsets.UTF_8);
+        }
+        if (!key.endsWith(".mp4")) {
+            return "/api/v1/video/stream/" + key;
+        }
+        String params = "key=" + URLEncoder.encode(key, StandardCharsets.UTF_8);
+        // Un vídeo público no necesita credenciales: mantener el token fuera de la
+        // URL evita que acabe en historiales, logs de proxy o enlaces compartidos.
+        if (video.getVisibility() != VisibilityEnum.PUBLIC && token != null && !token.isBlank()) {
+            params += "&token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+        }
+        return "/api/v1/video/stream?" + params;
+    }
+
+    private boolean s3ObjectExists(String key) {
+        try {
+            s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
+            return true;
+        } catch (Exception e) {
+            log.debug("El objeto {} no está disponible en el almacenamiento", key);
+            return false;
+        }
+    }
+
     // ---------- Acceso y utilidades ----------
 
-    private Video findAccessibleVideo(String key, User viewer) {
-        Video video = videoRepository.findByFilename(key)
+    /**
+     * Resuelve el vídeo canónico a partir de una key de streaming. Sólo se permiten
+     * la key fuente exacta, los artefactos HLS de su árbol y las variantes MP4 legacy.
+     */
+    private Video resolveStreamVideo(String key, User viewer) {
+        String sourceKey = canonicalSourceKey(key);
+        if (sourceKey == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Vídeo no encontrado");
+        }
+        Video video = videoRepository.findByFilename(sourceKey)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vídeo no encontrado"));
         return requireVideoAccess(video, viewer);
+    }
+
+    /** Devuelve la key del MP4 fuente si la key solicitada es válida; null en caso contrario. */
+    private String canonicalSourceKey(String key) {
+        Matcher matcher;
+        if ((matcher = HLS_MASTER_PATTERN.matcher(key)).matches()
+                || (matcher = HLS_PLAYLIST_PATTERN.matcher(key)).matches()
+                || (matcher = HLS_SEGMENT_PATTERN.matcher(key)).matches()) {
+            return matcher.group(1) + ".mp4";
+        }
+        if ((matcher = LEGACY_VARIANT_PATTERN.matcher(key)).matches()) {
+            return matcher.group(1) + ".mp4";
+        }
+        if (key.endsWith(".mp4")) {
+            return key;
+        }
+        return null;
     }
 
     private Video findAccessibleVideo(Integer id, User viewer) {
