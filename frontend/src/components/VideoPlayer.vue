@@ -480,6 +480,7 @@ onUnmounted(() => {
             <div v-if="qualityMenuOpen" class="quality-menu" role="menu" aria-label="Calidad de video">
               <button
                 class="quality-option"
+                type="button"
                 :class="{ active: qualityPreference === 'auto' }"
                 role="menuitemradio"
                 :aria-checked="qualityPreference === 'auto'"
@@ -489,6 +490,7 @@ onUnmounted(() => {
                 v-for="level in levels"
                 :key="level.index"
                 class="quality-option"
+                type="button"
                 :class="{ active: qualityPreference === `${level.height}p` }"
                 role="menuitemradio"
                 :aria-checked="qualityPreference === `${level.height}p`"
@@ -496,6 +498,7 @@ onUnmounted(() => {
               >{{ level.height }}p</button>
               <button
                 class="quality-option"
+                type="button"
                 :class="{ active: qualityPreference === 'original' }"
                 role="menuitemradio"
                 :aria-checked="qualityPreference === 'original'"
