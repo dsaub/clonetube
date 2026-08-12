@@ -11,7 +11,11 @@ import os
 from typing import Any
 
 from opentelemetry import context, propagate, trace
+from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -106,6 +110,7 @@ def init_telemetry(service_name: str) -> None:
     resource = Resource(attributes={SERVICE_NAME: otel_service})
 
     provider = TracerProvider(resource=resource)
+    log_provider = LoggerProvider(resource=resource)
 
     otlp_endpoint_raw = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
     traces_endpoint_raw = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "").strip()
@@ -125,9 +130,29 @@ def init_telemetry(service_name: str) -> None:
 
         exporter = OTLPSpanExporter(**exporter_kwargs)
         provider.add_span_processor(BatchSpanProcessor(exporter))
+
+        logs_endpoint_raw = os.getenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "").strip()
+        logs_endpoint = logs_endpoint_raw or otlp_endpoint_raw.rstrip("/")
+        if not logs_endpoint and traces_endpoint_raw:
+            logs_endpoint = traces_endpoint_raw.rstrip("/")
+        if logs_endpoint.endswith("/v1/traces"):
+            logs_endpoint = logs_endpoint[:-len("/v1/traces")]
+        if not logs_endpoint.endswith("/v1/logs"):
+            logs_endpoint = f"{logs_endpoint}/v1/logs"
+        log_exporter_kwargs: dict[str, Any] = {"endpoint": logs_endpoint}
+        if headers:
+            log_exporter_kwargs["headers"] = headers
+        log_provider.add_log_record_processor(
+            BatchLogRecordProcessor(OTLPLogExporter(**log_exporter_kwargs))
+        )
+        set_logger_provider(log_provider)
+        logging.getLogger().addHandler(
+            LoggingHandler(level=logging.NOTSET, logger_provider=log_provider)
+        )
         logger.info(
-            "OTel configurado: endpoint=%s service=%s headers=%s",
+            "OTel configurado: traces=%s logs=%s service=%s headers=%s",
             endpoint,
+            logs_endpoint,
             otel_service,
             list(headers.keys()) if headers else "(ninguno)",
         )
@@ -146,3 +171,17 @@ def init_telemetry(service_name: str) -> None:
 def get_tracer(name: str = "worker") -> trace.Tracer:
     """Return a tracer scoped to *name*."""
     return trace.get_tracer(name)
+
+
+def flush_telemetry(timeout_millis: int = 10_000) -> None:
+    """Flush pending traces and logs before process termination."""
+    try:
+        trace.get_tracer_provider().force_flush(timeout_millis)
+    except Exception:
+        logger.exception("No se pudieron enviar las trazas pendientes")
+    try:
+        from opentelemetry import _logs
+
+        _logs.get_logger_provider().force_flush(timeout_millis)
+    except Exception:
+        logger.exception("No se pudieron enviar los logs pendientes")
