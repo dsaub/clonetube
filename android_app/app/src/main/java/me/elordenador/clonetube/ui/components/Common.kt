@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -37,16 +39,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import me.elordenador.clonetube.ui.theme.Accent
-import me.elordenador.clonetube.ui.theme.Accent100
-import me.elordenador.clonetube.ui.theme.Accent800
-import me.elordenador.clonetube.ui.theme.CoverScrim
-import me.elordenador.clonetube.ui.theme.DividerColor
-import me.elordenador.clonetube.ui.theme.Neutral100
-import me.elordenador.clonetube.ui.theme.Neutral800
 import me.elordenador.clonetube.ui.theme.RADIUS_MD
-import me.elordenador.clonetube.ui.theme.SurfaceColor
-import me.elordenador.clonetube.ui.theme.TextColor
+import me.elordenador.clonetube.ui.theme.currentPalette
 import me.elordenador.clonetube.ui.theme.coverBrush
 
 // ── buttons (.btn / .btn-primary / .btn-secondary) ─────────────────────────────
@@ -58,7 +52,36 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     height: Dp? = null,
-) = NocturneButton(label, onClick, modifier, enabled, height, Accent, Accent)
+    cornerRadius: Dp = 10.dp,
+    icon: (@Composable () -> Unit)? = null,
+) {
+    val p = currentPalette()
+    val shape = RoundedCornerShape(cornerRadius)
+    Row(
+        modifier = modifier
+            .alpha(if (enabled) 1f else 0.45f)
+            .then(if (height != null) Modifier.height(height) else Modifier)
+            .clip(shape)
+            .background(p.accent)
+            .clickable(enabled = enabled, onClick = onClick)
+            .defaultMinSize(minHeight = 32.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        if (icon != null) {
+            icon()
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 14.sp,
+            lineHeight = 17.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
 
 @Composable
 fun SecondaryButton(
@@ -67,25 +90,16 @@ fun SecondaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     height: Dp? = null,
-) = NocturneButton(label, onClick, modifier, enabled, height, TextColor, DividerColor)
-
-@Composable
-private fun NocturneButton(
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier,
-    enabled: Boolean,
-    height: Dp?,
-    contentColor: Color,
-    borderColor: Color,
+    cornerRadius: Dp = 10.dp,
 ) {
-    val shape = RoundedCornerShape(RADIUS_MD.dp)
+    val p = currentPalette()
+    val shape = RoundedCornerShape(cornerRadius)
     Box(
         modifier = modifier
             .alpha(if (enabled) 1f else 0.45f)
             .then(if (height != null) Modifier.height(height) else Modifier)
             .clip(shape)
-            .border(1.dp, borderColor, shape)
+            .border(1.dp, p.borderAlt, shape)
             .clickable(enabled = enabled, onClick = onClick)
             .defaultMinSize(minHeight = 32.dp)
             .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -93,10 +107,10 @@ private fun NocturneButton(
     ) {
         Text(
             text = label,
-            color = contentColor,
+            color = p.textSecondary,
             fontSize = 14.sp,
             lineHeight = 17.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -109,20 +123,22 @@ fun IconBlockButton(
     modifier: Modifier = Modifier,
     icon: @Composable () -> Unit,
 ) {
+    val p = currentPalette()
     val shape = RoundedCornerShape(RADIUS_MD.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp)
             .clip(shape)
-            .border(1.dp, DividerColor, shape)
+            .background(p.surfaceAlt)
+            .border(1.dp, p.border, shape)
             .clickable(onClick = onClick)
             .padding(start = 14.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         icon()
-        Text(label, color = TextColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = p.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -138,22 +154,24 @@ fun LabeledField(
     isPassword: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
     singleLine: Boolean = true,
-    minHeight: Dp = 36.dp,
+    minHeight: Dp = 42.dp,
 ) {
-    val shape = RoundedCornerShape(RADIUS_MD.dp)
+    val p = currentPalette()
+    val shape = RoundedCornerShape(7.dp)
     Column(modifier) {
         Text(
             text = label,
-            color = TextColor.copy(alpha = 0.7f),
+            color = p.textSecondary,
             fontSize = 12.sp,
-            modifier = Modifier.padding(bottom = 5.dp),
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 6.dp),
         )
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = singleLine,
-            textStyle = TextStyle(color = TextColor, fontSize = 14.sp),
-            cursorBrush = SolidColor(Accent),
+            textStyle = TextStyle(color = p.text, fontSize = 14.sp, fontWeight = FontWeight.Bold),
+            cursorBrush = SolidColor(p.accent),
             visualTransformation =
                 if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
@@ -161,13 +179,18 @@ fun LabeledField(
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = minHeight)
                 .clip(shape)
-                .background(SurfaceColor)
-                .border(1.dp, DividerColor, shape)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .background(p.input)
+                .border(1.dp, p.borderInput, shape)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty() && placeholder != null) {
-                        Text(placeholder, color = TextColor.copy(alpha = 0.4f), fontSize = 14.sp)
+                        Text(
+                            placeholder,
+                            color = p.textMuted2,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Normal,
+                        )
                     }
                     inner()
                 }
@@ -184,15 +207,23 @@ fun Avatar(
     size: Dp,
     fontSize: TextUnit,
     modifier: Modifier = Modifier,
+    ring: Color? = null,
 ) {
+    val p = currentPalette()
     Box(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(Accent800),
+            .then(if (ring != null) Modifier.border(2.dp, ring, CircleShape) else Modifier)
+            .background(p.avatar),
         contentAlignment = Alignment.Center,
     ) {
-        Text(initial, color = Accent100, fontSize = fontSize, fontWeight = FontWeight.Bold)
+        Text(
+            initial,
+            color = p.accentIcon,
+            fontSize = fontSize,
+            fontWeight = FontWeight.ExtraBold,
+        )
     }
 }
 
@@ -201,10 +232,11 @@ fun Avatar(
 fun VideoCover(
     coverIndex: Int,
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 4.dp,
+    cornerRadius: Dp = RADIUS_MD.dp,
     playBadgeSize: Dp? = null,
     duration: String? = null,
 ) {
+    val p = currentPalette()
     Box(
         modifier = modifier
             .aspectRatio(16f / 9f)
@@ -217,32 +249,45 @@ fun VideoCover(
                 modifier = Modifier
                     .size(playBadgeSize)
                     .clip(CircleShape)
-                    .background(CoverScrim.copy(alpha = 0.5f)),
+                    .background(p.playButton),
                 contentAlignment = Alignment.Center,
             ) {
-                IconPlay(size = playBadgeSize * 0.4f)
+                IconPlay(size = playBadgeSize * 0.42f)
             }
         }
         if (duration != null) {
             Text(
                 text = duration,
-                color = Color.White,
+                color = p.badgeText,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(6.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(CoverScrim.copy(alpha = 0.75f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .background(p.badge)
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
             )
         }
     }
 }
 
+/** The header rule under the app / screen headers. */
+@Composable
+fun HeaderDivider(modifier: Modifier = Modifier) {
+    val p = currentPalette()
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(p.divider)
+    )
+}
+
 /** The `.hr` rule, which fades out at both ends. */
 @Composable
 fun FadingDivider(modifier: Modifier = Modifier) {
+    val p = currentPalette()
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -250,8 +295,8 @@ fun FadingDivider(modifier: Modifier = Modifier) {
             .background(
                 Brush.horizontalGradient(
                     0f to Color.Transparent,
-                    0.18f to DividerColor,
-                    0.82f to DividerColor,
+                    0.18f to p.divider,
+                    0.82f to p.divider,
                     1f to Color.Transparent,
                 )
             )
@@ -261,28 +306,30 @@ fun FadingDivider(modifier: Modifier = Modifier) {
 /** A plain 1dp rule, used where the design draws solid box edges. */
 @Composable
 fun SolidDivider(modifier: Modifier = Modifier) {
+    val p = currentPalette()
     Box(
         modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(DividerColor)
+            .background(p.divider)
     )
 }
 
 /** `.tag.tag-neutral` */
 @Composable
 fun NeutralTag(text: String, modifier: Modifier = Modifier) {
+    val p = currentPalette()
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(Neutral800)
-            .padding(horizontal = 10.dp, vertical = 3.dp),
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.chipSelected)
+            .padding(horizontal = 9.dp, vertical = 3.dp),
     ) {
-        Text(text, color = Neutral100, fontSize = 11.sp)
+        Text(text, color = p.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 
-/** A borderless circular tap target, used for the header back/close/upload buttons. */
+/** A circular tap target, optionally tinted like the design's header icon buttons. */
 @Composable
 fun IconButtonBox(
     onClick: () -> Unit,
@@ -299,19 +346,20 @@ fun IconButtonBox(
     ) { content() }
 }
 
-/** `.card` + `.elev-sm` */
+/** `.card` */
 @Composable
 fun NocturneCard(
     modifier: Modifier = Modifier,
     padding: PaddingValues = PaddingValues(8.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(RADIUS_MD.dp)
+    val p = currentPalette()
+    val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = modifier
             .clip(shape)
-            .background(SurfaceColor)
-            .border(1.dp, Neutral800, shape)
+            .background(p.surface)
+            .border(1.dp, p.border, shape)
             .padding(padding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),

@@ -20,50 +20,78 @@ import androidx.compose.ui.unit.sp
 import me.elordenador.clonetube.ui.components.SolidDivider
 import me.elordenador.clonetube.ui.components.VideoRow
 import me.elordenador.clonetube.ui.state.ClonetubeAppState
-import me.elordenador.clonetube.ui.theme.Neutral500
+import me.elordenador.clonetube.ui.theme.currentPalette
 
 @Composable
 fun SubsTab(state: ClonetubeAppState) {
-    // Rail of subscribed channels.
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(top = 6.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        state.subsChannels.forEach { channel ->
-            Column(
-                modifier = Modifier
-                    .width(56.dp)
-                    .clickable { state.openChannel(channel.handle) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                ChannelAvatar(channel.initial)
-                Text(
-                    text = channel.name,
-                    color = Neutral500,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+    val p = currentPalette()
+    if (!state.loggedIn) {
+        Text(
+            text = "Inicia sesión para ver las novedades de tus canales.",
+            color = p.textMuted,
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 40.dp),
+        )
+        return
+    }
+
+    Column {
+        // Rail of subscribed channels.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 6.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            state.subsChannels.forEach { channel ->
+                Column(
+                    modifier = Modifier
+                        .width(56.dp)
+                        .clickable { state.openChannel(channel.handle) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    ChannelAvatar(channel.initial)
+                    Text(
+                        text = channel.name,
+                        color = p.textMuted,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
-    }
-    SolidDivider()
-
-    state.subsVideos.forEach { video ->
-                VideoRow(
-            video = video,
-            meta = video.date,
-            thumbWidth = 130.dp,
-            onClick = { state.openWatch(video.id) },
-            verticalPadding = 10.dp,
-            modifier = Modifier.fillMaxWidth(),
-        )
         SolidDivider()
+
+        if (state.subsVideos.isEmpty()) {
+            Text(
+                text = "Sigue a canales para ver aquí sus vídeos.",
+                color = p.textMuted,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 30.dp),
+            )
+        } else {
+            state.subsVideos.forEach { video ->
+                VideoRow(
+                    video = video,
+                    meta = video.date,
+                    thumbWidth = 130.dp,
+                    onClick = { state.openWatch(video.id) },
+                    verticalPadding = 10.dp,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SolidDivider()
+            }
+        }
     }
 }

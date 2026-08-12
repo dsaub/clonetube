@@ -6,6 +6,7 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,15 +47,7 @@ import me.elordenador.clonetube.ui.components.SecondaryButton
 import me.elordenador.clonetube.ui.components.SolidDivider
 import me.elordenador.clonetube.ui.state.ClonetubeAppState
 import me.elordenador.clonetube.ui.state.UploadStep
-import me.elordenador.clonetube.ui.theme.Accent
-import me.elordenador.clonetube.ui.theme.Accent100
-import me.elordenador.clonetube.ui.theme.Accent800
-import me.elordenador.clonetube.ui.theme.Neutral300
-import me.elordenador.clonetube.ui.theme.Neutral400
-import me.elordenador.clonetube.ui.theme.Neutral500
-import me.elordenador.clonetube.ui.theme.RADIUS_MD
-import me.elordenador.clonetube.ui.theme.SurfaceColor
-import me.elordenador.clonetube.ui.theme.TextColor
+import me.elordenador.clonetube.ui.theme.currentPalette
 
 @Composable
 fun UploadScreen(state: ClonetubeAppState) {
@@ -69,6 +62,8 @@ fun UploadScreen(state: ClonetubeAppState) {
         ActivityResultContracts.CaptureVideo(),
     ) { ok -> if (ok) cameraUri?.let { state.pickVideo(it, nameFromUri(context, it)) } }
 
+    val p = currentPalette()
+
     Column(Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -77,8 +72,8 @@ fun UploadScreen(state: ClonetubeAppState) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("Subir video", color = TextColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            IconButtonBox(onClick = state::closeOverlay, size = 32.dp) { IconClose(TextColor) }
+            Text("Subir vídeo", color = p.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            IconButtonBox(onClick = state::closeOverlay, size = 32.dp) { IconClose(p.text) }
         }
         SolidDivider()
 
@@ -108,34 +103,37 @@ fun UploadScreen(state: ClonetubeAppState) {
 
 @Composable
 private fun SourcePicker(onGallery: () -> Unit, onCamera: () -> Unit) {
+    val p = currentPalette()
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         IconBlockButton(
             label = "Elegir de la galería",
             onClick = onGallery,
-            icon = { IconGallery(TextColor) },
+            icon = { IconGallery(p.accentIcon) },
         )
         IconBlockButton(
             label = "Grabar con la cámara",
             onClick = onCamera,
-            icon = { IconCamera(TextColor) },
+            icon = { IconCamera(p.accentIcon) },
         )
     }
 }
 
 @Composable
 private fun DetailsForm(state: ClonetubeAppState) {
+    val p = currentPalette()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 16.dp)
-            .clip(RoundedCornerShape(RADIUS_MD.dp))
-            .background(SurfaceColor)
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.surface)
+            .border(1.dp, p.border, RoundedCornerShape(12.dp))
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        IconCamera(Accent, size = 22.dp)
-        Text(state.pickedFileName, color = Neutral300, fontSize = 13.sp)
+        IconCamera(p.accent, size = 22.dp)
+        Text(state.pickedFileName, color = p.textSecondary, fontSize = 13.sp)
     }
     LabeledField(
         label = "Título",
@@ -153,7 +151,7 @@ private fun DetailsForm(state: ClonetubeAppState) {
         modifier = Modifier.padding(bottom = 16.dp),
     )
     PrimaryButton(
-        label = if (state.uploadError != null) "Reintentar" else "Subir video",
+        label = if (state.uploadError != null) "Reintentar" else "Subir vídeo",
         onClick = state::startUpload,
         modifier = Modifier.fillMaxWidth(),
         height = 46.dp,
@@ -161,7 +159,7 @@ private fun DetailsForm(state: ClonetubeAppState) {
     state.uploadError?.let { error ->
         Text(
             text = error,
-            color = Neutral400,
+            color = p.textMuted,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 10.dp),
         )
@@ -170,19 +168,20 @@ private fun DetailsForm(state: ClonetubeAppState) {
 
 @Composable
 private fun Progress(state: ClonetubeAppState) {
+    val p = currentPalette()
     Column(Modifier.padding(top = 24.dp)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(10.dp)
                 .clip(CircleShape)
-                .background(SurfaceColor),
+                .background(p.surfaceAlt),
         ) {
             Box(
                 Modifier
                     .fillMaxWidth(state.uploadProgress / 100f)
                     .fillMaxHeight()
-                    .background(Accent),
+                    .background(p.accent),
             )
         }
         Row(
@@ -191,14 +190,15 @@ private fun Progress(state: ClonetubeAppState) {
                 .padding(top = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("Subiendo ${state.pickedFileName}", color = Neutral500, fontSize = 12.sp)
-            Text("${state.uploadProgress}%", color = Neutral500, fontSize = 12.sp)
+            Text("Subiendo ${state.pickedFileName}", color = p.textMuted, fontSize = 12.sp)
+            Text("${state.uploadProgress}%", color = p.textMuted, fontSize = 12.sp)
         }
     }
 }
 
 @Composable
 private fun Done(state: ClonetubeAppState) {
+    val p = currentPalette()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -210,21 +210,21 @@ private fun Done(state: ClonetubeAppState) {
             modifier = Modifier
                 .size(56.dp)
                 .clip(CircleShape)
-                .background(Accent800),
+                .background(p.accent.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center,
         ) {
-            IconCheck(Accent100)
+            IconCheck(p.accent, size = 26.dp)
         }
         Text(
-            text = "Video subido",
-            color = TextColor,
+            text = "Vídeo subido",
+            color = p.text,
             fontSize = 25.sp,
             lineHeight = 28.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.Bold,
         )
         Text(
             text = "«${state.uploadTitle}» ya está en tu biblioteca.",
-            color = Neutral400,
+            color = p.textMuted,
             fontSize = 13.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(bottom = 6.dp),

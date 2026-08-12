@@ -15,14 +15,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.elordenador.clonetube.model.VideoItem
-import me.elordenador.clonetube.ui.theme.Neutral500
-import me.elordenador.clonetube.ui.theme.RADIUS_SM
-import me.elordenador.clonetube.ui.theme.TextColor
+import me.elordenador.clonetube.ui.theme.RADIUS_MD
+import me.elordenador.clonetube.ui.theme.currentPalette
 
 /**
- * The compact thumbnail-left list row shared by the subscriptions tab, the
- * "Más videos" list and the channel screen. Only the thumbnail width and the
- * metadata line differ between them.
+ * The thumbnail-left list row shared by the subscriptions tab, the "Más videos"
+ * list, the channel screen and the suggested list. Only the thumbnail width and
+ * the metadata line differ between them.
  */
 @Composable
 fun VideoRow(
@@ -33,6 +32,7 @@ fun VideoRow(
     modifier: Modifier = Modifier,
     verticalPadding: Dp = 8.dp,
 ) {
+    val p = currentPalette()
     Row(
         modifier = modifier
             .clickable(onClick = onClick)
@@ -41,22 +41,23 @@ fun VideoRow(
     ) {
         VideoCover(
             coverIndex = video.coverIndex,
-            cornerRadius = RADIUS_SM.dp,
+            cornerRadius = RADIUS_MD.dp,
+            duration = video.duration,
             modifier = Modifier.width(thumbWidth),
         )
         Column {
             Text(
                 text = video.title,
-                color = TextColor,
+                color = p.text,
                 fontSize = 13.sp,
                 lineHeight = 17.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = meta,
-                color = Neutral500,
+                color = p.textMuted,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp),
             )

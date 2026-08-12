@@ -39,7 +39,7 @@ data class CompleteMultipartResponse(
 
 @Serializable
 data class VideoCatalogItemDto(
-    val id: String,
+    val id: Int,
     val filename: String,
     val title: String,
     val description: String,
@@ -53,7 +53,7 @@ data class VideoCatalogResponse(val videos: List<VideoCatalogItemDto>)
 
 @Serializable
 data class FeedVideoItemDto(
-    val id: String,
+    val id: Int,
     val filename: String,
     val title: String,
     val description: String,
@@ -75,7 +75,7 @@ data class FeedResponse(
 
 @Serializable
 data class VideoDetailDto(
-    val id: String,
+    val id: Int,
     val key: String,
     val title: String,
     val description: String,
@@ -90,7 +90,7 @@ data class StreamUrlResponse(val url: String, val key: String)
 
 @Serializable
 data class StudioVideoItemDto(
-    val id: String,
+    val id: Int,
     val key: String,
     val size: Long,
     @SerialName("last_modified") val lastModified: String,

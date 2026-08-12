@@ -29,21 +29,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.elordenador.clonetube.ui.components.Avatar
+import me.elordenador.clonetube.ui.components.HeaderDivider
 import me.elordenador.clonetube.ui.components.IconButtonBox
+import me.elordenador.clonetube.ui.components.IconHome
 import me.elordenador.clonetube.ui.components.IconPerson
-import me.elordenador.clonetube.ui.components.IconPlus
 import me.elordenador.clonetube.ui.components.IconSearch
 import me.elordenador.clonetube.ui.components.IconSubscriptions
+import me.elordenador.clonetube.ui.components.IconUpload
 import me.elordenador.clonetube.ui.components.IconVideos
+import me.elordenador.clonetube.ui.components.IconPlay
 import me.elordenador.clonetube.ui.state.ClonetubeAppState
 import me.elordenador.clonetube.ui.state.Tab
-import me.elordenador.clonetube.ui.theme.Accent
-import me.elordenador.clonetube.ui.theme.Accent100
-import me.elordenador.clonetube.ui.theme.Accent800
-import me.elordenador.clonetube.ui.theme.DividerColor
-import me.elordenador.clonetube.ui.theme.Neutral500
-import me.elordenador.clonetube.ui.theme.SurfaceColor
-import me.elordenador.clonetube.ui.theme.TextColor
+import me.elordenador.clonetube.ui.theme.currentPalette
 
 @Composable
 fun MainScaffold(state: ClonetubeAppState) {
@@ -54,11 +51,12 @@ fun MainScaffold(state: ClonetubeAppState) {
                 .weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 16.dp),
+                .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 16.dp),
         ) {
             when (state.tab) {
                 Tab.HOME -> HomeTab(state)
                 Tab.SUBS -> SubsTab(state)
+                Tab.STUDIO -> StudioTab(state)
                 Tab.YOU -> YouTab(state)
             }
         }
@@ -68,82 +66,158 @@ fun MainScaffold(state: ClonetubeAppState) {
 
 @Composable
 private fun TopBar(state: ClonetubeAppState) {
+    val p = currentPalette()
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Brand(state.tab, Modifier.weight(1f))
+            when (state.tab) {
+                Tab.HOME -> SearchButton(state)
+                Tab.STUDIO -> QuickUploadButton(state)
+                else -> {}
+            }
+            ProfileButton(state)
+        }
+        HeaderDivider()
+    }
+}
+
+/** Clonetube brand mark + wordmark, with the STUDIO eyebrow on the studio tab. */
+@Composable
+private fun Brand(tab: Tab, modifier: Modifier = Modifier) {
+    val p = currentPalette()
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 10.dp),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
-        when (state.tab) {
-            Tab.HOME -> SearchBox(state, Modifier.weight(1f))
-            Tab.SUBS -> TopBarTitle("Seguidores", Modifier.weight(1f))
-            Tab.YOU -> TopBarTitle("Tu cuenta", Modifier.weight(1f))
-        }
-
-        IconButtonBox(onClick = state::openUpload, size = 36.dp) {
-            IconPlus(TextColor)
-        }
-
-        // Account button: the user's initial once signed in, a person glyph otherwise.
         Box(
             modifier = Modifier
                 .size(34.dp)
-                .clip(CircleShape)
-                .background(if (state.loggedIn) Accent800 else Color.Transparent)
-                .border(1.dp, DividerColor, CircleShape)
-                .clickable(onClick = state::openAccount),
+                .clip(RoundedCornerShape(7.dp))
+                .background(p.accent),
             contentAlignment = Alignment.Center,
         ) {
-            if (state.loggedIn) {
+            IconPlay(size = 16.dp)
+        }
+        if (tab == Tab.STUDIO) {
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
-                    text = state.accountInitial,
-                    color = Accent100,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
+                    "Clonetube",
+                    color = p.textBright,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
                 )
-            } else {
-                IconPerson(TextColor)
+                Text(
+                    "STUDIO",
+                    color = p.accentText,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.4.sp,
+                )
             }
+        } else {
+            Text(
+                "Clonetube",
+                color = p.textBright,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-0.4).sp,
+            )
         }
     }
 }
 
 @Composable
-private fun TopBarTitle(title: String, modifier: Modifier = Modifier) {
-    Text(
-        text = title,
-        color = TextColor,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Medium,
-        modifier = modifier,
-    )
+private fun SearchButton(state: ClonetubeAppState) {
+    val p = currentPalette()
+    IconButtonBox(onClick = { state.searchOpen = !state.searchOpen }, size = 42.dp) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(p.surfaceAlt)
+                .border(1.dp, p.borderAlt, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            IconSearch(p.accentIcon, size = 20.dp)
+        }
+    }
 }
 
 @Composable
-private fun SearchBox(state: ClonetubeAppState, modifier: Modifier = Modifier) {
+private fun QuickUploadButton(state: ClonetubeAppState) {
+    val p = currentPalette()
+    IconButtonBox(onClick = state::openUpload, size = 42.dp) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(p.accent.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            IconUpload(p.accentIcon, size = 22.dp)
+        }
+    }
+}
+
+@Composable
+private fun ProfileButton(state: ClonetubeAppState) {
+    val p = currentPalette()
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(if (state.loggedIn) p.avatar else Color.Transparent)
+            .border(1.dp, if (state.loggedIn) p.border else p.borderAlt, CircleShape)
+            .clickable(onClick = state::openAccount),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (state.loggedIn) {
+            Text(
+                text = state.accountInitial,
+                color = p.accentIcon,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+            )
+        } else {
+            IconPerson(p.textMuted, size = 20.dp)
+        }
+    }
+}
+
+/** Search row shown under the header while the search button is toggled on. */
+@Composable
+fun SearchRow(state: ClonetubeAppState, modifier: Modifier = Modifier) {
+    val p = currentPalette()
     Row(
         modifier = modifier
-            .height(38.dp)
-            .clip(CircleShape)
-            .background(SurfaceColor)
-            .border(1.dp, DividerColor, CircleShape)
+            .fillMaxWidth()
+            .height(42.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.surfaceAlt)
+            .border(1.dp, p.borderAlt, RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        IconSearch(Neutral500)
+        IconSearch(p.accentIcon, size = 18.dp)
         BasicTextField(
             value = state.searchQuery,
             onValueChange = { state.searchQuery = it },
             singleLine = true,
-            textStyle = TextStyle(color = TextColor, fontSize = 13.sp),
-            cursorBrush = SolidColor(Accent),
+            textStyle = TextStyle(color = p.text, fontSize = 14.sp),
+            cursorBrush = SolidColor(p.accent),
             modifier = Modifier.weight(1f),
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (state.searchQuery.isEmpty()) {
-                        Text("Buscar", color = Neutral500, fontSize = 13.sp)
+                        Text("Buscar en Clonetube", color = p.textMuted, fontSize = 14.sp)
                     }
                     inner()
                 }
@@ -154,30 +228,41 @@ private fun SearchBox(state: ClonetubeAppState, modifier: Modifier = Modifier) {
 
 @Composable
 private fun BottomNav(state: ClonetubeAppState) {
-    Column {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(DividerColor)
-        )
+    val p = currentPalette()
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 6.dp, bottom = 8.dp),
+                .height(60.dp)
+                .clip(RoundedCornerShape(30.dp))
+                .background(p.navPill)
+                .border(1.dp, p.divider, RoundedCornerShape(30.dp))
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             NavItem(
-                label = "Videos",
+                label = "Inicio",
                 selected = state.tab == Tab.HOME,
                 onClick = { state.selectTab(Tab.HOME) },
                 modifier = Modifier.weight(1f),
-            ) { IconVideos(it) }
+            ) { IconHome(it, size = 21.dp) }
             NavItem(
-                label = "Seguidores",
+                label = "Siguiendo",
                 selected = state.tab == Tab.SUBS,
                 onClick = { state.selectTab(Tab.SUBS) },
                 modifier = Modifier.weight(1f),
-            ) { IconSubscriptions(it) }
+            ) { IconSubscriptions(it, size = 21.dp) }
+            NavItem(
+                label = "Studio",
+                selected = state.tab == Tab.STUDIO,
+                onClick = { state.selectTab(Tab.STUDIO) },
+                modifier = Modifier.weight(1f),
+            ) { IconVideos(it, size = 21.dp) }
             NavItem(
                 label = "Tú",
                 selected = state.tab == Tab.YOU,
@@ -196,16 +281,24 @@ private fun NavItem(
     modifier: Modifier = Modifier,
     icon: @Composable (Color) -> Unit,
 ) {
-    val tint = if (selected) Accent else Neutral500
+    val p = currentPalette()
+    val tint = if (selected) p.accentIcon else p.textMuted
     Column(
         modifier = modifier
-            .clickable(onClick = onClick)
-            .padding(vertical = 2.dp),
+            .height(48.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(if (selected) p.selectedTab else Color.Transparent)
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
         icon(tint)
-        Text(label, color = tint, fontSize = 11.sp)
+        Text(
+            label,
+            color = if (selected) p.accentLabel else p.textMuted,
+            fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+        )
     }
 }
 

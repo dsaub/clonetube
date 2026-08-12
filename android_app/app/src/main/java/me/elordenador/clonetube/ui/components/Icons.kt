@@ -34,6 +34,24 @@ private val CameraBodyPath = svg("M4 8h3l2-2h6l2 2h3v11H4z")
 private val CheckPath = svg("M4 12l5 5 11-11")
 private val SubsArcPath = svg("M4 10a8 8 0 0116 0")
 private val VideosTrianglePath = svg("M10 10l5 2-5 2z")
+private val HomePath = svg("M3 10.5L12 3l9 7.5")
+private val HomeRoofPath = svg("M5 9.5V21h14V9.5")
+private val RefreshArcPath = svg("M21 12a9 9 0 1 1-2.64-6.36")
+private val RefreshHeadPath = svg("M21 3v6h-6")
+private val LinkPath = svg("M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7")
+private val LinkHandlePath = svg("M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7")
+private val ChevronDownPath = svg("M6 9l6 6 6-6")
+private val HeartPath = svg("M12 20s-7-4.5-9.5-9a5.2 5.2 0 0 1 9.5-2.6A5.2 5.2 0 0 1 21.5 11c-2.5 4.5-9.5 9-9.5 9z")
+private val SharePath = svg("M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8")
+private val ShareHeadPath = svg("M16 6l-4-4-4 4M12 2v13")
+private val BookmarkPath = svg("M6 3h12v18l-6-4-6 4z")
+private val TrashLidPath = svg("M3 6h18")
+private val TrashBodyPath = svg("M8 6V4h8v2M19 6l-1 14H6L5 6")
+private val UploadArrowPath = svg("M12 15V3M7 8l5-5 5 5")
+private val UploadTrayPath = svg("M5 21h14")
+private val VolumeBodyPath = svg("M11 5 6 9H3v6h3l5 4z")
+private val VolumeArcPath = svg("M15.5 8.5a5 5 0 0 1 0 7")
+private val FullscreenPath = svg("M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3")
 
 @Composable
 private fun IconCanvas(size: Dp, modifier: Modifier, draw: DrawScope.() -> Unit) {
@@ -139,3 +157,68 @@ fun IconSubscriptions(tint: Color, modifier: Modifier = Modifier, size: Dp = 21.
             style = stroke(1.8f),
         )
     }
+
+@Composable
+fun IconHome(tint: Color, modifier: Modifier = Modifier, size: Dp = 21.dp) =
+    IconCanvas(size, modifier) {
+        drawPath(HomeRoofPath, tint, style = stroke(1.8f))
+        drawPath(HomePath, tint, style = stroke(1.8f))
+    }
+
+@Composable
+fun IconRefresh(tint: Color, modifier: Modifier = Modifier, size: Dp = 18.dp) =
+    IconCanvas(size, modifier) {
+        drawPath(RefreshHeadPath, tint, style = stroke(1.8f))
+        drawPath(RefreshArcPath, tint, style = stroke(1.8f))
+    }
+
+@Composable
+fun IconLink(tint: Color, modifier: Modifier = Modifier, size: Dp = 14.dp) =
+    IconCanvas(size, modifier) {
+        drawPath(LinkHandlePath, tint, style = stroke(1.7f))
+        drawPath(LinkPath, tint, style = stroke(1.7f))
+    }
+
+@Composable
+fun IconChevronDown(tint: Color, modifier: Modifier = Modifier, size: Dp = 19.dp) =
+    IconCanvas(size, modifier) { drawPath(ChevronDownPath, tint, style = stroke(1.8f)) }
+
+@Composable
+fun IconLike(tint: Color, modifier: Modifier = Modifier, size: Dp = 17.dp) =
+    IconCanvas(size, modifier) { drawPath(HeartPath, tint, style = stroke(1.6f)) }
+
+@Composable
+fun IconShare(tint: Color, modifier: Modifier = Modifier, size: Dp = 17.dp) =
+    IconCanvas(size, modifier) {
+        drawPath(ShareHeadPath, tint, style = stroke(1.7f))
+        drawPath(SharePath, tint, style = stroke(1.7f))
+    }
+
+@Composable
+fun IconBookmark(tint: Color, modifier: Modifier = Modifier, size: Dp = 17.dp) =
+    IconCanvas(size, modifier) { drawPath(BookmarkPath, tint, style = stroke(1.7f)) }
+
+@Composable
+fun IconTrash(tint: Color, modifier: Modifier = Modifier, size: Dp = 17.dp) =
+    IconCanvas(size, modifier) {
+        drawPath(TrashLidPath, tint, style = stroke(1.7f))
+        drawPath(TrashBodyPath, tint, style = stroke(1.7f))
+    }
+
+@Composable
+fun IconUpload(tint: Color, modifier: Modifier = Modifier, size: Dp = 22.dp) =
+    IconCanvas(size, modifier) {
+        drawPath(UploadTrayPath, tint, style = stroke(1.8f))
+        drawPath(UploadArrowPath, tint, style = stroke(1.8f))
+    }
+
+@Composable
+fun IconVolume(tint: Color, modifier: Modifier = Modifier, size: Dp = 22.dp) =
+    IconCanvas(size, modifier) {
+        drawPath(VolumeBodyPath, tint, style = stroke(1.7f))
+        drawPath(VolumeArcPath, tint, style = stroke(1.7f))
+    }
+
+@Composable
+fun IconFullscreen(tint: Color, modifier: Modifier = Modifier, size: Dp = 24.dp) =
+    IconCanvas(size, modifier) { drawPath(FullscreenPath, tint, style = stroke(1.8f)) }

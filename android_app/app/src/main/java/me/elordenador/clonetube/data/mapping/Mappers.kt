@@ -22,55 +22,55 @@ fun visibilityOf(value: String?): VideoVisibility = when (value?.lowercase()) {
 }
 
 fun VideoCatalogItemDto.toDomain(): VideoItem = VideoItem(
-    id = id,
+    id = id.toString(),
     key = filename,
     title = title,
     description = description,
     author = authorName,
     handle = authorUsername,
-    authorId = authorId,
+    authorId = authorId.toString(),
     date = "",
     duration = null,
     subscribed = false,
     likes = 0,
     visibility = VideoVisibility.PUBLIC,
-    coverIndex = coverIndexFor(id),
+    coverIndex = coverIndexFor(id.toString()),
 )
 
 fun FeedVideoItemDto.toDomain(): VideoItem = VideoItem(
-    id = id,
+    id = id.toString(),
     key = filename,
     title = title,
     description = description,
     author = authorName,
     handle = authorUsername,
-    authorId = authorId,
+    authorId = authorId.toString(),
     date = formatSpanishDate(createdAt),
     duration = null,
     subscribed = fromFollowedAuthor,
     likes = likes,
     visibility = VideoVisibility.PUBLIC,
-    coverIndex = coverIndexFor(id),
+    coverIndex = coverIndexFor(id.toString()),
 )
 
 fun VideoDetailDto.toDomain(): VideoItem = VideoItem(
-    id = id,
+    id = id.toString(),
     key = key,
     title = title,
     description = description,
     author = authorName,
     handle = authorUsername,
-    authorId = authorId,
+    authorId = authorId.toString(),
     date = "",
     duration = null,
     subscribed = false,
     likes = 0,
     visibility = visibilityOf(visibility),
-    coverIndex = coverIndexFor(id),
+    coverIndex = coverIndexFor(id.toString()),
 )
 
 fun StudioVideoItemDto.toDomain(): VideoItem = VideoItem(
-    id = id,
+    id = id.toString(),
     key = key,
     title = title,
     description = description,
@@ -82,7 +82,7 @@ fun StudioVideoItemDto.toDomain(): VideoItem = VideoItem(
     subscribed = false,
     likes = 0,
     visibility = visibilityOf(visibility),
-    coverIndex = coverIndexFor(id),
+    coverIndex = coverIndexFor(id.toString()),
 )
 
 fun FollowingListResponse.toDomain(): List<Channel> = users.map { it.toDomain() }
@@ -94,18 +94,18 @@ fun PublicUserDto.toDomain(): Channel = Channel(
 )
 
 fun ChannelResponseDto.toDomain(): ChannelInfo = ChannelInfo(
-    id = id,
+    id = id.toString(),
     name = fullName,
     handle = username,
     initial = fullName.take(1).uppercase(),
     videoCount = videoCount,
     subCount = followers,
     following = following,
-    coverIndex = coverIndexFor(id),
+    coverIndex = coverIndexFor(id.toString()),
 )
 
 fun ChannelVideoItemDto.toDomain(): VideoItem = VideoItem(
-    id = id,
+    id = id.toString(),
     key = key,
     title = title,
     description = description,
@@ -117,5 +117,5 @@ fun ChannelVideoItemDto.toDomain(): VideoItem = VideoItem(
     subscribed = false,
     likes = likes,
     visibility = visibilityOf(visibility),
-    coverIndex = coverIndexFor(id),
+    coverIndex = coverIndexFor(id.toString()),
 )

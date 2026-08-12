@@ -30,13 +30,16 @@ import retrofit2.HttpException
 import java.text.NumberFormat
 import java.util.Locale
 
-enum class Tab { HOME, SUBS, YOU }
+enum class Tab { HOME, SUBS, STUDIO, YOU }
 
 enum class Overlay { WATCH, CHANNEL, UPLOAD, AUTH }
 
 enum class UploadStep { IDLE, PICKED, UPLOADING, DONE }
 
 enum class AuthMode { LOGIN, REGISTER }
+
+/** The home feed filter chips: "Para ti" shows the global feed, "Siguiendo" the followed channels. */
+enum class FeedFilter { ALL, FOLLOWING }
 
 private val SPANISH: Locale = Locale.forLanguageTag("es-ES")
 
@@ -64,6 +67,8 @@ class ClonetubeAppState(context: Context? = null) {
     var usernameHandle by mutableStateOf("tu_usuario"); private set
 
     var searchQuery by mutableStateOf("")
+    var searchOpen by mutableStateOf(false)
+    var feedFilter by mutableStateOf(FeedFilter.ALL)
 
     var authLoading by mutableStateOf(false); private set
     var authError by mutableStateOf<String?>(null); private set
@@ -124,13 +129,22 @@ class ClonetubeAppState(context: Context? = null) {
     // ── derived values used by screens ───────────────────────────────────────
     val homeFeed: List<VideoItem>
         get() {
+            val base = when (feedFilter) {
+                FeedFilter.ALL -> homeVideos
+                FeedFilter.FOLLOWING -> followingFeed
+            }
             val query = searchQuery.trim().lowercase(SPANISH)
             return if (query.isEmpty()) {
-                homeVideos
+                base
             } else {
-                homeVideos.filter { "${it.title} ${it.author}".lowercase(SPANISH).contains(query) }
+                base.filter { "${it.title} ${it.author}".lowercase(SPANISH).contains(query) }
             }
         }
+
+    val followingFeed: List<VideoItem>
+        get() = (homeVideos + subsVideos)
+            .filter { it.handle in subscribedHandles }
+            .distinctBy { it.id }
 
     val accountInitial: String get() = username.take(1).uppercase(SPANISH)
     val loginEnabled: Boolean get() = loginUsername.isNotBlank() && loginPassword.isNotBlank()
@@ -145,6 +159,7 @@ class ClonetubeAppState(context: Context? = null) {
         tab = next
         overlay = null
         if (next == Tab.SUBS) scope.launch { loadSubs() }
+        if (next == Tab.STUDIO) scope.launch { loadStudio() }
     }
 
     fun openWatch(id: String) {
@@ -200,6 +215,10 @@ class ClonetubeAppState(context: Context? = null) {
     fun openAccount() {
         tab = Tab.YOU
         overlay = null
+    }
+
+    fun refreshHome() {
+        scope.launch { loadHome() }
     }
 
     fun logout() {

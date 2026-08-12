@@ -34,7 +34,7 @@ data class TokenResponse(
 
 @Serializable
 data class UserResponse(
-    val id: String,
+    val id: Int,
     val username: String,
     @SerialName("full_name") val fullName: String,
     val email: String,

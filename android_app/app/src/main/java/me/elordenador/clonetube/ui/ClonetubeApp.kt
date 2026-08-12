@@ -21,8 +21,7 @@ import me.elordenador.clonetube.ui.screens.WatchScreen
 import me.elordenador.clonetube.ui.state.ClonetubeAppState
 import me.elordenador.clonetube.ui.state.Overlay
 import me.elordenador.clonetube.ui.state.rememberClonetubeAppState
-import me.elordenador.clonetube.ui.theme.Bg
-import me.elordenador.clonetube.ui.theme.TextColor
+import me.elordenador.clonetube.ui.theme.currentPalette
 
 /**
  * Root of the app. Like the prototype, a single state object decides whether the
@@ -33,6 +32,7 @@ fun ClonetubeApp(
     state: ClonetubeAppState = rememberClonetubeAppState(),
     verifyCode: String? = null,
 ) {
+    val p = currentPalette()
     LaunchedEffect(verifyCode) {
         if (verifyCode != null) state.startVerification(verifyCode)
     }
@@ -43,11 +43,11 @@ fun ClonetubeApp(
         BackHandler(enabled = state.overlay != null) { state.closeOverlay() }
     }
 
-    CompositionLocalProvider(LocalContentColor provides TextColor) {
+    CompositionLocalProvider(LocalContentColor provides p.text) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Bg)
+                .background(p.bg)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
         ) {
             when (state.overlay) {

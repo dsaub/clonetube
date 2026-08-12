@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class PublicUserDto(
-    val id: String,
+    val id: Int,
     val username: String,
     @SerialName("full_name") val fullName: String,
 )
@@ -15,7 +15,7 @@ data class FollowingListResponse(val users: List<PublicUserDto>)
 
 @Serializable
 data class ChannelResponseDto(
-    val id: String,
+    val id: Int,
     val username: String,
     @SerialName("full_name") val fullName: String,
     val following: Boolean,
@@ -26,7 +26,7 @@ data class ChannelResponseDto(
 
 @Serializable
 data class ChannelVideoItemDto(
-    val id: String,
+    val id: Int,
     val key: String,
     val title: String,
     val description: String,
