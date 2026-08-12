@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getAccessibleVideoMetadataById, getStreamUrl, type VideoMetadata } from '@/api/video'
+import { getAccessibleVideoMetadataById, getPlaybackInfo, type VideoMetadata } from '@/api/video'
 import VideoPlayer from '@/components/VideoPlayer.vue'
 import FollowButton from '@/components/FollowButton.vue'
 import { channelPath } from '@/api/channel'
@@ -10,6 +10,8 @@ const route = useRoute()
 
 const videoId = ref('')
 const streamUrl = ref('')
+const hlsMasterUrl = ref<string | null>(null)
+const playbackToken = ref<string | undefined>()
 const title = ref('')
 const metadata = ref<VideoMetadata | null>(null)
 const loading = ref(true)
@@ -35,11 +37,13 @@ async function loadVideo() {
 
   try {
     const token = localStorage.getItem('token') || undefined
-    const [url, details] = await Promise.all([
-      getStreamUrl(id, token),
+    playbackToken.value = token
+    const [playback, details] = await Promise.all([
+      getPlaybackInfo(id, token),
       getAccessibleVideoMetadataById(id, token).catch(() => null),
     ])
-    streamUrl.value = url
+    streamUrl.value = playback.originalUrl
+    hlsMasterUrl.value = playback.hlsMasterUrl
     metadata.value = details
     if (details?.title) title.value = details.title
     loading.value = false
@@ -81,7 +85,7 @@ onMounted(() => {
       </div>
 
       <template v-else>
-        <VideoPlayer :src="streamUrl" />
+        <VideoPlayer :src="streamUrl" :hls-src="hlsMasterUrl ?? undefined" :token="playbackToken" />
         <section class="video-details" aria-labelledby="watch-video-title">
           <div class="video-heading">
             <div>

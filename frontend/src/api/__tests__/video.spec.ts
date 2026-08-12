@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   completeMultipart,
+  getPlaybackInfo,
   getStreamUrl,
   listVideos,
   listVideosWithMetadata,
@@ -158,6 +159,41 @@ describe('getStreamUrl', () => {
     })
 
     await expect(getStreamUrl('42')).rejects.toThrow('Error al obtener URL de streaming')
+  })
+})
+
+describe('getPlaybackInfo', () => {
+  it('normalizes original and HLS playback URLs and sends the Bearer token', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        original: { url: '/api/v1/video/stream?key=videos%2Fabc.mp4' },
+        hls: { masterUrl: '/api/v1/video/stream/videos/abc/hls/master.m3u8' },
+      }),
+    })
+
+    await expect(getPlaybackInfo('42', 'token-123')).resolves.toEqual({
+      originalUrl: '/api/v1/video/stream?key=videos%2Fabc.mp4',
+      hlsMasterUrl: '/api/v1/video/stream/videos/abc/hls/master.m3u8',
+    })
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/video/playback?id=42', {
+      headers: { Authorization: 'Bearer token-123' },
+    })
+  })
+
+  it('returns null when HLS is not available', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        original: { url: 'https://stream.example.com/video.mp4' },
+        hls: null,
+      }),
+    })
+
+    await expect(getPlaybackInfo('42')).resolves.toEqual({
+      originalUrl: 'https://stream.example.com/video.mp4',
+      hlsMasterUrl: null,
+    })
   })
 })
 
