@@ -48,6 +48,16 @@ export interface StreamUrlResponse {
   key: string
 }
 
+interface PlaybackInfoResponse {
+  original: { url: string }
+  hls: { masterUrl: string } | null
+}
+
+export interface PlaybackInfo {
+  originalUrl: string
+  hlsMasterUrl: string | null
+}
+
 export interface StartMultipartResponse {
   uploadId: string
   key: string
@@ -202,6 +212,18 @@ export async function getStreamUrl(id: string, token?: string): Promise<string> 
 
   const data: StreamUrlResponse = await response.json()
   return data.url
+}
+
+export async function getPlaybackInfo(id: string, token?: string): Promise<PlaybackInfo> {
+  const params = new URLSearchParams({ id })
+  const response = await fetch(`${API}/playback?${params}`, { headers: withBearer(token) })
+  if (!response.ok) throw errorMessage(response, 'Error al obtener las fuentes de reproducción')
+
+  const data = await response.json() as PlaybackInfoResponse
+  return {
+    originalUrl: data.original.url,
+    hlsMasterUrl: data.hls?.masterUrl ?? null,
+  }
 }
 
 export async function listStudioVideos(token: string): Promise<StudioVideoItem[]> {

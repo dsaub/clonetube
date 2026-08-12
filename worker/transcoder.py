@@ -16,7 +16,10 @@ tracer = get_tracer("transcoder")
 
 logger = logging.getLogger("video-worker.transcoder")
 
-TRANSCODE_VERSION = "h264-mp4-v1"
+TRANSCODE_VERSION = "hls-ts-v1"
+
+HLS_PLAYLIST_CONTENT_TYPE = "application/vnd.apple.mpegurl"
+HLS_SEGMENT_CONTENT_TYPE = "video/mp2t"
 
 
 class UnsupportedVideoError(ValueError):
@@ -47,6 +50,14 @@ class TranscodeProfile:
     @property
     def name(self) -> str:
         return f"{self.height}p"
+
+
+@dataclass(frozen=True)
+class MasterVariant:
+    name: str
+    bandwidth: int
+    width: int
+    height: int
 
 
 PROFILES = (
@@ -90,14 +101,25 @@ def variants_for(probe: VideoProbe) -> tuple[TranscodeProfile, ...]:
     return tuple(profile for profile in PROFILES if profile.height < probe.resolution)
 
 
+def _stem(source_key: str) -> str:
+    return source_key.rsplit(".", 1)[0]
+
+
+def hls_dir_key(source_key: str, profile: TranscodeProfile) -> str:
+    return f"{_stem(source_key)}/hls/{profile.name}"
+
+
 def variant_key(source_key: str, profile: TranscodeProfile) -> str:
-    stem = source_key.rsplit(".", 1)[0]
-    return f"{stem}/{profile.name}.mp4"
+    return f"{hls_dir_key(source_key, profile)}/playlist.m3u8"
 
 
-def ffmpeg_command(
+def master_key(source_key: str) -> str:
+    return f"{_stem(source_key)}/hls/master.m3u8"
+
+
+def hls_ffmpeg_command(
     input_path: Path,
-    output_path: Path,
+    output_dir: Path,
     source: VideoProbe,
     profile: TranscodeProfile,
 ) -> list[str]:
@@ -110,8 +132,27 @@ def ffmpeg_command(
         "-c:v", "libx264", "-preset", "medium", "-crf", str(profile.crf),
         "-profile:v", "high", "-level:v", profile.level, "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", profile.audio_bitrate,
-        "-movflags", "+faststart", str(output_path),
+        "-f", "hls", "-hls_time", "4", "-hls_playlist_type", "vod",
+        "-hls_segment_filename", str(output_dir / "seg_%05d.ts"),
+        str(output_dir / "playlist.m3u8"),
     ]
+
+
+def compute_bandwidth(segment_sizes: list[int], duration: float) -> int:
+    if duration <= 0:
+        return 0
+    return int(8 * sum(segment_sizes) / duration)
+
+
+def build_master_playlist(variants: list[MasterVariant]) -> str:
+    lines = ["#EXTM3U", "#EXT-X-VERSION:3"]
+    for variant in variants:
+        lines.append(
+            f"#EXT-X-STREAM-INF:BANDWIDTH={variant.bandwidth},"
+            f"RESOLUTION={variant.width}x{variant.height}"
+        )
+        lines.append(f"{variant.name}/playlist.m3u8")
+    return "\n".join(lines) + "\n"
 
 
 def run_command(command: list[str], timeout: int) -> str:
@@ -122,9 +163,9 @@ def run_command(command: list[str], timeout: int) -> str:
     return result.stdout
 
 
-def probe_video(path: Path, timeout: int) -> VideoProbe:
+def _probe(path: Path, timeout: int, extra_args: list[str]) -> VideoProbe:
     output = run_command([
-        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "ffprobe", "-v", "error", *extra_args, "-select_streams", "v:0",
         "-show_entries", "stream=codec_name,width,height,avg_frame_rate,r_frame_rate:format=duration",
         "-of", "json", str(path),
     ], timeout)
@@ -141,6 +182,14 @@ def probe_video(path: Path, timeout: int) -> VideoProbe:
         duration=float(payload.get("format", {}).get("duration") or 0),
         codec=str(stream.get("codec_name") or ""),
     )
+
+
+def probe_video(path: Path, timeout: int) -> VideoProbe:
+    return _probe(path, timeout, [])
+
+
+def probe_playlist(path: Path, timeout: int) -> VideoProbe:
+    return _probe(path, timeout, ["-allowed_extensions", "ALL"])
 
 
 class VideoTranscoder:
@@ -175,10 +224,16 @@ class VideoTranscoder:
                 "video.source_size_bytes": source_head.get("ContentLength", 0),
             })
 
-            completed: list[str] = []
+            master = master_key(job.source_key)
+            if self._is_complete(master, source_etag):
+                span.set_attributes({"video.completed_variants": json.dumps([master])})
+                span.set_status(Status(StatusCode.OK))
+                logger.info("Trabajo ya completado, se omite key=%s", master)
+                return [master]
+
+            uploaded: list[str] = []
             with tempfile.TemporaryDirectory(prefix="clonetube-video-") as temp_dir:
                 input_path = Path(temp_dir) / "source"
-                output_path = Path(temp_dir) / "variant.mp4"
 
                 with tracer.start_as_current_span("s3-download-source"):
                     self.s3.download_file(self.bucket, job.source_key, str(input_path))
@@ -201,14 +256,10 @@ class VideoTranscoder:
                     [profile.name for profile in profiles],
                 )
 
+                master_variants: list[MasterVariant] = []
                 for profile in profiles:
-                    key = variant_key(job.source_key, profile)
-                    if self._is_complete(key, source_etag, profile):
-                        logger.info("Variante ya existente, se omite key=%s", key)
-                        completed.append(key)
-                        continue
-
-                    output_path.unlink(missing_ok=True)
+                    output_dir = Path(temp_dir) / f"hls-{profile.name}"
+                    output_dir.mkdir()
 
                     with tracer.start_as_current_span(
                         "ffmpeg-transcode",
@@ -217,36 +268,92 @@ class VideoTranscoder:
                             "video.variant_height": profile.height,
                         },
                     ):
-                        run_command(ffmpeg_command(input_path, output_path, source, profile), self.timeout)
+                        run_command(hls_ffmpeg_command(input_path, output_dir, source, profile), self.timeout)
 
                     with tracer.start_as_current_span("ffprobe-variant"):
-                        output_probe = probe_video(output_path, self.timeout)
+                        output_probe = probe_playlist(output_dir / "playlist.m3u8", self.timeout)
                     if output_probe.codec != "h264" or output_probe.resolution > profile.height + 2:
                         raise RuntimeError(f"La variante {profile.name} no superó la validación de salida")
 
+                    segments = sorted(output_dir.glob("seg_*.ts"))
+                    master_variants.append(MasterVariant(
+                        name=profile.name,
+                        bandwidth=compute_bandwidth(
+                            [segment.stat().st_size for segment in segments],
+                            output_probe.duration,
+                        ),
+                        width=output_probe.width,
+                        height=output_probe.height,
+                    ))
+
                     with tracer.start_as_current_span(
-                        "s3-upload-variant",
-                        attributes={"video.variant_key": key},
+                        "s3-upload-hls-tree",
+                        attributes={"video.variant_profile": profile.name},
                     ):
-                        self.s3.upload_file(
-                            str(output_path), self.bucket, key,
-                            ExtraArgs={
-                                "ContentType": "video/mp4",
-                                "Metadata": {
-                                    "clonetube-profile": f"{TRANSCODE_VERSION}-{profile.name}",
-                                    "source-etag": source_etag,
-                                    "transcode-job-id": job.id,
-                                },
-                            },
+                        uploaded.extend(
+                            self.upload_hls_tree(
+                                output_dir,
+                                hls_dir_key(job.source_key, profile),
+                                source_etag,
+                                profile,
+                                job,
+                            )
                         )
-                    completed.append(key)
-                    logger.info("Variante subida key=%s", key)
+                    logger.info("Rendición HLS subida key=%s", hls_dir_key(job.source_key, profile))
 
-            span.set_attributes({"video.completed_variants": json.dumps(completed)})
+            with tracer.start_as_current_span("s3-upload-master"):
+                self.s3.put_object(
+                    Bucket=self.bucket,
+                    Key=master,
+                    Body=build_master_playlist(master_variants).encode("utf-8"),
+                    ContentType=HLS_PLAYLIST_CONTENT_TYPE,
+                    Metadata={
+                        "clonetube-profile": TRANSCODE_VERSION,
+                        "source-etag": source_etag,
+                        "transcode-job-id": job.id,
+                    },
+                )
+            uploaded.append(master)
+            span.set_attributes({"video.completed_variants": json.dumps(uploaded)})
             span.set_status(Status(StatusCode.OK))
-            return completed
+            return uploaded
 
-    def _is_complete(self, key: str, source_etag: str, profile: TranscodeProfile) -> bool:
+    def upload_hls_tree(
+        self,
+        local_dir: Path,
+        s3_dir_key: str,
+        source_etag: str,
+        profile: TranscodeProfile,
+        job: VideoTranscodeMessage,
+    ) -> list[str]:
+        uploaded: list[str] = []
+        for file in sorted(local_dir.iterdir()):
+            if file.suffix == ".m3u8":
+                content_type = HLS_PLAYLIST_CONTENT_TYPE
+            elif file.suffix == ".ts":
+                content_type = HLS_SEGMENT_CONTENT_TYPE
+            else:
+                content_type = "application/octet-stream"
+            key = f"{s3_dir_key}/{file.name}"
+            with tracer.start_as_current_span(
+                "s3-upload-hls-file",
+                attributes={"video.key": key},
+            ):
+                self.s3.upload_file(
+                    str(file), self.bucket, key,
+                    ExtraArgs={
+                        "ContentType": content_type,
+                        "Metadata": {
+                            "clonetube-profile": f"{TRANSCODE_VERSION}-{profile.name}",
+                            "source-etag": source_etag,
+                            "transcode-job-id": job.id,
+                        },
+                    },
+                )
+            uploaded.append(key)
+        return uploaded
+
+    def _is_complete(self, key: str, source_etag: str) -> bool:
         try:
             head = self.s3.head_object(Bucket=self.bucket, Key=key)
         except ClientError as error:
@@ -257,5 +364,5 @@ class VideoTranscoder:
         metadata = head.get("Metadata", {})
         return (
             metadata.get("source-etag") == source_etag
-            and metadata.get("clonetube-profile") == f"{TRANSCODE_VERSION}-{profile.name}"
+            and metadata.get("clonetube-profile") == TRANSCODE_VERSION
         )

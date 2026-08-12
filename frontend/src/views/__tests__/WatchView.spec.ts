@@ -27,7 +27,10 @@ describe('WatchView.vue', () => {
   it('shows loading state on mount', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ url: 'https://stream.example.com/video.mp4', key: 'videos/abc' }),
+      json: () => Promise.resolve({
+        original: { url: 'https://stream.example.com/video.mp4' },
+        hls: null,
+      }),
     })
 
     const router = await createRouterWithQuery({ id: '42' })
@@ -41,7 +44,10 @@ describe('WatchView.vue', () => {
   it('renders VideoPlayer when stream URL is loaded', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ url: 'https://stream.example.com/video.mp4', key: 'videos/abc' }),
+      json: () => Promise.resolve({
+        original: { url: 'https://stream.example.com/video.mp4' },
+        hls: { masterUrl: 'https://stream.example.com/master.m3u8' },
+      }),
     })
 
     const router = await createRouterWithQuery({ id: '42' })
@@ -53,13 +59,17 @@ describe('WatchView.vue', () => {
 
     expect(wrapper.findComponent(VideoPlayer).exists()).toBe(true)
     expect(wrapper.findComponent(VideoPlayer).props('src')).toBe('https://stream.example.com/video.mp4')
+    expect(wrapper.findComponent(VideoPlayer).props('hlsSrc')).toBe('https://stream.example.com/master.m3u8')
   })
 
   it('shows the title, description and uploader returned by the video detail API', async () => {
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ url: 'https://stream.example.com/video.mp4', key: 'videos/abc' }),
+        json: () => Promise.resolve({
+          original: { url: 'https://stream.example.com/video.mp4' },
+          hls: null,
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,

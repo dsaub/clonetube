@@ -7,7 +7,7 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from pydantic import ValidationError
 
 # ── OTel: inicializar ANTES de importar clients ────────────────
-from telemetry import extract_context, get_tracer, init_telemetry
+from telemetry import extract_context, flush_telemetry, get_tracer, init_telemetry
 
 # Configure logging before telemetry so exporter diagnostics are visible.
 logging.basicConfig(
@@ -162,13 +162,7 @@ def run_worker() -> None:
 
 def _shutdown_telemetry() -> None:
     """Flush pending spans before exit."""
-    from opentelemetry import trace as otel_trace
-
-    provider = otel_trace.get_tracer_provider()
-    try:
-        provider.force_flush(5_000)
-    except Exception:
-        pass
+    flush_telemetry(5_000)
 
 
 def main() -> None:

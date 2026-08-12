@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, onMounted, onUnmounted, watch } from 'vue'
+import type Hls from 'hls.js'
+import type { Level } from 'hls.js'
 
 const props = defineProps<{
   src: string
   poster?: string
+  hlsSrc?: string
+  token?: string
 }>()
+
+type QualityPreference = 'auto' | 'original' | `${number}p`
+type PlaybackEngine = 'hls.js' | 'native-hls' | 'original'
+
+const QUALITY_STORAGE_KEY = 'clonetube-quality'
 
 // ─── Refs ─────────────────────────────────────────────────────────
 const videoRef = ref<HTMLVideoElement | null>(null)
@@ -24,6 +33,177 @@ const error = ref(false)
 const fullscreen = ref(false)
 const showControls = ref(true)
 const controlsTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const hls = shallowRef<Hls | null>(null)
+const playbackEngine = ref<PlaybackEngine>('original')
+const levels = ref<Array<{ index: number; height: number }>>([])
+const activeLevelHeight = ref<number | null>(null)
+const qualityPreference = ref<QualityPreference>(readQualityPreference())
+const qualityMenuOpen = ref(false)
+let sourceGeneration = 0
+
+const hasQualitySelector = computed(() => !!props.hlsSrc)
+const qualityLabel = computed(() => {
+  if (qualityPreference.value === 'auto') {
+    return activeLevelHeight.value ? `Auto (${activeLevelHeight.value}p)` : 'Auto'
+  }
+  if (qualityPreference.value === 'original') return 'Original'
+  return qualityPreference.value
+})
+
+function readQualityPreference(): QualityPreference {
+  const stored = localStorage.getItem(QUALITY_STORAGE_KEY)
+  return stored === 'auto' || stored === 'original' || /^\d+p$/.test(stored ?? '')
+    ? stored as QualityPreference
+    : 'auto'
+}
+
+function persistQuality(preference: QualityPreference) {
+  qualityPreference.value = preference
+  localStorage.setItem(QUALITY_STORAGE_KEY, preference)
+}
+
+function destroyHls() {
+  hls.value?.destroy()
+  hls.value = null
+}
+
+function resetPlayerState() {
+  loading.value = true
+  error.value = false
+  currentTime.value = 0
+  duration.value = 0
+  buffered.value = 0
+  levels.value = []
+  activeLevelHeight.value = null
+  qualityMenuOpen.value = false
+}
+
+function restorePlayback(position: number, wasPlaying: boolean) {
+  const video = videoRef.value
+  if (!video) return
+
+  const restore = () => {
+    video.currentTime = position
+    if (wasPlaying) void video.play()
+  }
+  if (video.readyState >= HTMLMediaElement.HAVE_METADATA) restore()
+  else video.addEventListener('loadedmetadata', restore, { once: true })
+}
+
+function useOriginal(position = 0, wasPlaying = false) {
+  const video = videoRef.value
+  if (!video) return
+
+  destroyHls()
+  playbackEngine.value = 'original'
+  activeLevelHeight.value = null
+  video.src = props.src
+  video.load()
+  restorePlayback(position, wasPlaying)
+}
+
+function useNativeHls(position = 0, wasPlaying = false) {
+  const video = videoRef.value
+  if (!video || !props.hlsSrc) return
+
+  destroyHls()
+  playbackEngine.value = 'native-hls'
+  levels.value = []
+  activeLevelHeight.value = null
+  video.src = props.hlsSrc
+  video.load()
+  restorePlayback(position, wasPlaying)
+}
+
+async function useHlsJs(position = 0, wasPlaying = false, generation = sourceGeneration) {
+  const video = videoRef.value
+  if (!video || !props.hlsSrc) return
+
+  const { default: HlsClass } = await import('hls.js')
+  if (generation !== sourceGeneration || !videoRef.value || !props.hlsSrc) return
+
+  destroyHls()
+  playbackEngine.value = 'hls.js'
+  const instance = new HlsClass({
+    startPosition: position,
+    xhrSetup: (xhr) => {
+      if (props.token) xhr.setRequestHeader('Authorization', `Bearer ${props.token}`)
+    },
+  })
+  hls.value = instance
+  instance.on(HlsClass.Events.MANIFEST_PARSED, (_event, data) => {
+    const availableLevels = data.levels
+      .map((level: Level, index: number) => ({ index, height: level.height }))
+      .filter((level) => level.height > 0)
+      .sort((a, b) => b.height - a.height)
+    levels.value = availableLevels
+
+    if (qualityPreference.value === 'original') {
+      useOriginal(position, wasPlaying)
+      return
+    }
+
+    const savedHeight = Number.parseInt(qualityPreference.value, 10)
+    const savedLevel = availableLevels.find((level) => level.height === savedHeight)
+    if (qualityPreference.value !== 'auto' && !savedLevel) persistQuality('auto')
+    instance.currentLevel = savedLevel?.index ?? -1
+    if (wasPlaying) void video.play()
+  })
+  instance.on(HlsClass.Events.LEVEL_SWITCHED, (_event, data) => {
+    activeLevelHeight.value = instance.levels[data.level]?.height ?? null
+  })
+  instance.on(HlsClass.Events.ERROR, (_event, data) => {
+    if (data.fatal) useOriginal(video.currentTime, !video.paused)
+  })
+  instance.loadSource(props.hlsSrc)
+  instance.attachMedia(video)
+}
+
+async function initializeSource(position = 0, wasPlaying = false) {
+  const video = videoRef.value
+  if (!video) return
+  const generation = ++sourceGeneration
+
+  destroyHls()
+  levels.value = []
+  activeLevelHeight.value = null
+  if (!props.hlsSrc || qualityPreference.value === 'original') {
+    useOriginal(position, wasPlaying)
+    return
+  }
+
+  const { default: HlsClass } = await import('hls.js')
+  if (generation !== sourceGeneration) return
+  if (HlsClass.isSupported()) {
+    await useHlsJs(position, wasPlaying, generation)
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    useNativeHls(position, wasPlaying)
+  } else {
+    useOriginal(position, wasPlaying)
+  }
+}
+
+function selectQuality(preference: QualityPreference) {
+  const video = videoRef.value
+  if (!video) return
+  const position = video.currentTime
+  const wasPlaying = !video.paused
+  persistQuality(preference)
+  qualityMenuOpen.value = false
+
+  if (preference === 'original') {
+    useOriginal(position, wasPlaying)
+    return
+  }
+  if (playbackEngine.value !== 'hls.js') {
+    void initializeSource(position, wasPlaying)
+    return
+  }
+
+  const height = Number.parseInt(preference, 10)
+  const level = levels.value.find((candidate) => candidate.height === height)
+  hls.value!.currentLevel = preference === 'auto' ? -1 : level?.index ?? -1
+}
 
 // ─── Formateo ─────────────────────────────────────────────────────
 function formatTime(seconds: number): string {
@@ -170,22 +350,24 @@ function onFullscreenChange() {
   fullscreen.value = !!document.fullscreenElement
 }
 
-// ─── Watch src changes ────────────────────────────────────────────
-watch(() => props.src, () => {
-  loading.value = true
-  error.value = false
-  currentTime.value = 0
-  duration.value = 0
-  buffered.value = 0
+watch(() => [props.src, props.hlsSrc] as const, async () => {
+  sourceGeneration++
+  destroyHls()
+  resetPlayerState()
+  await nextTick()
+  void initializeSource()
 })
 
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFullscreenChange)
+  void initializeSource()
 })
 
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', onFullscreenChange)
   if (controlsTimer.value) clearTimeout(controlsTimer.value)
+  sourceGeneration++
+  destroyHls()
 })
 </script>
 
@@ -203,7 +385,6 @@ onUnmounted(() => {
     <video
       ref="videoRef"
       class="player-video"
-      :src="src"
       :poster="poster"
       preload="metadata"
       crossorigin="anonymous"
@@ -284,6 +465,48 @@ onUnmounted(() => {
         </div>
 
         <div class="controls-right">
+          <div v-if="hasQualitySelector" class="quality-control">
+            <button
+              class="ctrl-btn quality-btn"
+              type="button"
+              aria-label="Calidad de video"
+              :aria-expanded="qualityMenuOpen"
+              @click="qualityMenuOpen = !qualityMenuOpen"
+            >
+              <span aria-hidden="true">⚙</span>
+              <span>{{ qualityLabel }}</span>
+            </button>
+
+            <div v-if="qualityMenuOpen" class="quality-menu" role="menu" aria-label="Calidad de video">
+              <button
+                class="quality-option"
+                type="button"
+                :class="{ active: qualityPreference === 'auto' }"
+                role="menuitemradio"
+                :aria-checked="qualityPreference === 'auto'"
+                @click="selectQuality('auto')"
+              >Auto</button>
+              <button
+                v-for="level in levels"
+                :key="level.index"
+                class="quality-option"
+                type="button"
+                :class="{ active: qualityPreference === `${level.height}p` }"
+                role="menuitemradio"
+                :aria-checked="qualityPreference === `${level.height}p`"
+                @click="selectQuality(`${level.height}p`)"
+              >{{ level.height }}p</button>
+              <button
+                class="quality-option"
+                type="button"
+                :class="{ active: qualityPreference === 'original' }"
+                role="menuitemradio"
+                :aria-checked="qualityPreference === 'original'"
+                @click="selectQuality('original')"
+              >Original</button>
+            </div>
+          </div>
+
           <button
             class="ctrl-btn speed-btn"
             @click="setPlaybackRate(playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1)"
@@ -474,6 +697,52 @@ onUnmounted(() => {
   font-size: 0.8rem;
   font-weight: 600;
   min-width: 2.5rem;
+}
+
+.quality-control { position: relative; }
+
+.quality-btn {
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.quality-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.6rem);
+  display: grid;
+  min-width: 9rem;
+  padding: 0.35rem;
+  border: 1px solid #3a3a58;
+  border-radius: 8px;
+  background: rgba(24, 24, 39, 0.98);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.quality-option {
+  border: 0;
+  border-radius: 5px;
+  padding: 0.5rem 0.65rem;
+  background: transparent;
+  color: #ddd;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quality-option:hover,
+.quality-option.active {
+  background: #302d55;
+  color: #fff;
+}
+
+.quality-option.active::before {
+  content: '✓';
+  display: inline-block;
+  width: 1.15rem;
+  color: #9d97ff;
 }
 
 .volume-slider {

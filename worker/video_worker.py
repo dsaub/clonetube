@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("video-worker")
 
 # Initialize logging before telemetry so exporter diagnostics are visible.
-from telemetry import extract_context, get_tracer, init_telemetry
+from telemetry import extract_context, flush_telemetry, get_tracer, init_telemetry
 
 init_telemetry("clonetube-video-worker")
 tracer = get_tracer("video-worker")
@@ -145,11 +145,7 @@ def main() -> None:
                 time.sleep(5)
     finally:
         logger.info("Worker de vídeo detenido, enviando telemetría pendiente…")
-        try:
-            from opentelemetry import trace as otel_trace
-            otel_trace.get_tracer_provider().force_flush(10_000)
-        except Exception:
-            pass
+        flush_telemetry(10_000)
 
 
 if __name__ == "__main__":
