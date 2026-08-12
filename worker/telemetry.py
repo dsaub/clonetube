@@ -21,6 +21,8 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
+from constants import OTLP_LOGS_PATH, OTLP_TRACES_PATH
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -85,6 +87,50 @@ def _parse_otel_headers(raw: str) -> dict[str, str]:
     return headers
 
 
+def _normalize_traces_endpoint(traces_endpoint_raw: str, base_endpoint: str) -> str:
+    """Complete a collector URL with the OTLP traces path when missing."""
+    endpoint = traces_endpoint_raw or base_endpoint.rstrip("/")
+    if not endpoint.endswith(OTLP_TRACES_PATH):
+        endpoint = f"{endpoint}{OTLP_TRACES_PATH}"
+    return endpoint
+
+
+def _normalize_logs_endpoint(
+    logs_endpoint_raw: str,
+    base_endpoint: str,
+    traces_endpoint_raw: str,
+) -> str:
+    """Derive the OTLP logs URL, falling back to the base or traces endpoint."""
+    endpoint = logs_endpoint_raw or base_endpoint.rstrip("/")
+    if not endpoint and traces_endpoint_raw:
+        endpoint = traces_endpoint_raw.rstrip("/")
+    if endpoint.endswith(OTLP_TRACES_PATH):
+        endpoint = endpoint[: -len(OTLP_TRACES_PATH)]
+    if not endpoint.endswith(OTLP_LOGS_PATH):
+        endpoint = f"{endpoint}{OTLP_LOGS_PATH}"
+    return endpoint
+
+
+def _configure_span_export(provider: TracerProvider, endpoint: str, headers: dict[str, str]) -> None:
+    exporter_kwargs: dict[str, Any] = {"endpoint": endpoint}
+    if headers:
+        exporter_kwargs["headers"] = headers
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(**exporter_kwargs)))
+
+
+def _configure_log_export(log_provider: LoggerProvider, endpoint: str, headers: dict[str, str]) -> None:
+    exporter_kwargs: dict[str, Any] = {"endpoint": endpoint}
+    if headers:
+        exporter_kwargs["headers"] = headers
+    log_provider.add_log_record_processor(
+        BatchLogRecordProcessor(OTLPLogExporter(**exporter_kwargs))
+    )
+    set_logger_provider(log_provider)
+    logging.getLogger().addHandler(
+        LoggingHandler(level=logging.NOTSET, logger_provider=log_provider)
+    )
+
+
 def init_telemetry(service_name: str) -> None:
     """Bootstrap the OpenTelemetry SDK.
 
@@ -112,46 +158,22 @@ def init_telemetry(service_name: str) -> None:
     provider = TracerProvider(resource=resource)
     log_provider = LoggerProvider(resource=resource)
 
-    otlp_endpoint_raw = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
+    base_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
     traces_endpoint_raw = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "").strip()
     otlp_headers_raw = os.getenv("OTEL_EXPORTER_OTLP_HEADERS", "").strip()
 
-    if traces_endpoint_raw or otlp_endpoint_raw:
+    if traces_endpoint_raw or base_endpoint:
         # Accept both the standard complete traces endpoint and a collector base URL.
-        endpoint = traces_endpoint_raw or otlp_endpoint_raw.rstrip("/")
-        if not endpoint.endswith("/v1/traces"):
-            endpoint = f"{endpoint}/v1/traces"
-
+        traces_endpoint = _normalize_traces_endpoint(traces_endpoint_raw, base_endpoint)
         headers = _parse_otel_headers(otlp_headers_raw)
-
-        exporter_kwargs: dict[str, Any] = {"endpoint": endpoint}
-        if headers:
-            exporter_kwargs["headers"] = headers
-
-        exporter = OTLPSpanExporter(**exporter_kwargs)
-        provider.add_span_processor(BatchSpanProcessor(exporter))
+        _configure_span_export(provider, traces_endpoint, headers)
 
         logs_endpoint_raw = os.getenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "").strip()
-        logs_endpoint = logs_endpoint_raw or otlp_endpoint_raw.rstrip("/")
-        if not logs_endpoint and traces_endpoint_raw:
-            logs_endpoint = traces_endpoint_raw.rstrip("/")
-        if logs_endpoint.endswith("/v1/traces"):
-            logs_endpoint = logs_endpoint[:-len("/v1/traces")]
-        if not logs_endpoint.endswith("/v1/logs"):
-            logs_endpoint = f"{logs_endpoint}/v1/logs"
-        log_exporter_kwargs: dict[str, Any] = {"endpoint": logs_endpoint}
-        if headers:
-            log_exporter_kwargs["headers"] = headers
-        log_provider.add_log_record_processor(
-            BatchLogRecordProcessor(OTLPLogExporter(**log_exporter_kwargs))
-        )
-        set_logger_provider(log_provider)
-        logging.getLogger().addHandler(
-            LoggingHandler(level=logging.NOTSET, logger_provider=log_provider)
-        )
+        logs_endpoint = _normalize_logs_endpoint(logs_endpoint_raw, base_endpoint, traces_endpoint_raw)
+        _configure_log_export(log_provider, logs_endpoint, headers)
         logger.info(
             "OTel configurado: traces=%s logs=%s service=%s headers=%s",
-            endpoint,
+            traces_endpoint,
             logs_endpoint,
             otel_service,
             list(headers.keys()) if headers else "(ninguno)",
