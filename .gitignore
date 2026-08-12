@@ -4,3 +4,4 @@ __pycache__/
 
 # BD de tests locales (backend.old)
 backend.old/test_clonetube.db
+opencode.jsonc
