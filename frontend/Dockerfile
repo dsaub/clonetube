@@ -43,9 +43,9 @@ RUN mkdir -p /etc/caddy && \
 
 FROM gcr.io/distroless/static-debian12:nonroot
 
-COPY --from=build --chown=nonroot:nonroot /app/dist /usr/share/nginx/html
-COPY --from=build --chown=nonroot:nonroot /usr/local/bin/caddy /usr/local/bin/caddy
-COPY --from=build --chown=nonroot:nonroot /etc/caddy /etc/caddy
+COPY --from=build --chown=root:root /app/dist /usr/share/nginx/html
+COPY --from=build --chown=root:root /usr/local/bin/caddy /usr/local/bin/caddy
+COPY --from=build --chown=root:root /etc/caddy /etc/caddy
 
 USER nonroot:nonroot
 

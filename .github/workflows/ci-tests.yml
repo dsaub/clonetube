@@ -109,4 +109,4 @@ jobs:
 
       - name: Run tests
         working-directory: worker
-        run: uv run --no-sync python -m unittest discover -s tests
+        run: uv run --no-sync --no-build python -m unittest discover -s tests

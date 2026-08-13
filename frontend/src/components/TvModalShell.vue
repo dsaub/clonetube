@@ -68,15 +68,13 @@ function onKeydown(event: KeyboardEvent) {
   const first = focusable[0]!
   const last = focusable.at(-1)!
   const activeElement = document.activeElement
-  if (!panel.value.contains(activeElement)) {
+  const focusFirst = !event.shiftKey && (activeElement === last || !panel.value.contains(activeElement))
+  if (focusFirst) {
     event.preventDefault()
     first.focus()
   } else if (event.shiftKey && (activeElement === first || activeElement === panel.value)) {
     event.preventDefault()
     last.focus()
-  } else if (!event.shiftKey && activeElement === last) {
-    event.preventDefault()
-    first.focus()
   }
 }
 
