@@ -41,6 +41,7 @@ import me.elordenador.clonetube.ui.components.IconMore
 import me.elordenador.clonetube.ui.components.IconTrash
 import me.elordenador.clonetube.ui.components.IconUpload
 import me.elordenador.clonetube.ui.components.LabeledField
+import me.elordenador.clonetube.ui.components.LabeledFieldOptions
 import me.elordenador.clonetube.ui.components.PrimaryButton
 import me.elordenador.clonetube.ui.components.VideoCover
 import me.elordenador.clonetube.ui.state.AuthMode
@@ -268,9 +269,11 @@ private fun EditorCard(
             label = "Descripción",
             value = desc,
             onValueChange = { desc = it },
-            placeholder = "Añade una descripción…",
-            singleLine = false,
-            minHeight = 62.dp,
+            options = LabeledFieldOptions(
+                placeholder = "Añade una descripción…",
+                singleLine = false,
+                minHeight = 62.dp,
+            ),
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

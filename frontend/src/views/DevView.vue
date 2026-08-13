@@ -56,7 +56,7 @@ onMounted(() => {
           Prueba el flujo completo de subida de videos: el archivo se envía
           <strong>por fragmentos</strong> y Clonetube los ensambla al terminar.
         </p>
-        <button class="btn-upload" @click="openModal">
+        <button type="button" class="btn-upload" @click="openModal">
           <span class="btn-icon">📤</span>
           Subir video
         </button>
@@ -180,8 +180,8 @@ onMounted(() => {
 }
 
 .badge {
-  background: #6c63ff;
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.2rem 0.6rem;
@@ -238,8 +238,8 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.85rem 2rem;
-  background: #6c63ff;
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   border: none;
   border-radius: 12px;
   font-size: 1.05rem;
@@ -283,8 +283,8 @@ onMounted(() => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #6c63ff;
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   font-weight: 700;
   font-size: 0.8rem;
 }
@@ -331,9 +331,9 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.method.post { background: rgba(73, 204, 144, 0.15); color: #49cc90; }
-.method.get  { background: rgba(97, 175, 254, 0.15); color: #61affe; }
-.method.put  { background: rgba(252, 161, 48, 0.15); color: #fca130; }
+.method.post { background: #17382b; color: #73e5b0; }
+.method.get  { background: #19334d; color: #8bc8ff; }
+.method.put  { background: #44301a; color: #ffc36f; }
 
 .endpoint-info {
   display: flex;
@@ -348,7 +348,7 @@ onMounted(() => {
 
 .desc {
   font-size: 0.78rem;
-  color: #888;
+  color: #aaa8b7;
 }
 
 /* ─── Info ──────────────────────────────────────── */
@@ -388,7 +388,7 @@ onMounted(() => {
   background: #1a1a2e;
   border-radius: 10px;
   border: 1px solid #2a2a4a;
-  color: #888;
+  color: #aaa8b7;
   font-size: 0.9rem;
 }
 
@@ -443,7 +443,7 @@ onMounted(() => {
 
 .card-meta {
   font-size: 0.75rem;
-  color: #777;
+  color: #aaa8b7;
   margin: 0;
 }
 </style>

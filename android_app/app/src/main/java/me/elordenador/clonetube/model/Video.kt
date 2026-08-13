@@ -2,6 +2,8 @@ package me.elordenador.clonetube.model
 
 import kotlin.math.absoluteValue
 
+private const val SAMPLE_AUTHOR = "Marta Ríos"
+
 /** Visibility of a video, mirroring the backend's literal values. */
 enum class VideoVisibility { PUBLIC, UNLISTED, PRIVATE }
 
@@ -51,10 +53,10 @@ fun coverIndexFor(seed: String): Int = (seed.hashCode().absoluteValue) % 3
  * so the UI can be previewed without touching the network.
  */
 val sampleVideos: List<VideoItem> = listOf(
-    VideoItem("s1", "videos/s1.mp4", "Amanecer en el desierto de Tabernas", "", "Marta Ríos", "martarios", "u1", "12 jul 2026", null, true, 0, VideoVisibility.PUBLIC, 0),
+    VideoItem("s1", "videos/s1.mp4", "Amanecer en el desierto de Tabernas", "", SAMPLE_AUTHOR, "martarios", "u1", "12 jul 2026", null, true, 0, VideoVisibility.PUBLIC, 0),
     VideoItem("s2", "videos/s2.mp4", "Cómo grabar audio limpio en exteriores", "", "Iker Zabala", "ikerz", "u2", "9 jul 2026", null, false, 0, VideoVisibility.PUBLIC, 1),
-    VideoItem("s3", "videos/s3.mp4", "Recorrido nocturno por el barrio del Carmen", "", "Marta Ríos", "martarios", "u1", "3 jul 2026", null, true, 0, VideoVisibility.PUBLIC, 2),
+    VideoItem("s3", "videos/s3.mp4", "Recorrido nocturno por el barrio del Carmen", "", SAMPLE_AUTHOR, "martarios", "u1", "3 jul 2026", null, true, 0, VideoVisibility.PUBLIC, 2),
     VideoItem("s4", "videos/s4.mp4", "Probando el nuevo micro de solapa", "", "Nuria Puig", "nuriapuig", "u3", "29 jun 2026", null, false, 0, VideoVisibility.PUBLIC, 0),
     VideoItem("s5", "videos/s5.mp4", "Sesión de skate en la Marina", "", "Dídac Ferrer", "didacf", "u4", "21 jun 2026", null, true, 0, VideoVisibility.PUBLIC, 1),
-    VideoItem("s6", "videos/s6.mp4", "Charla: cómo empecé a grabar viajes", "", "Marta Ríos", "martarios", "u1", "14 jun 2026", null, true, 0, VideoVisibility.PUBLIC, 2),
+    VideoItem("s6", "videos/s6.mp4", "Charla: cómo empecé a grabar viajes", "", SAMPLE_AUTHOR, "martarios", "u1", "14 jun 2026", null, true, 0, VideoVisibility.PUBLIC, 2),
 )

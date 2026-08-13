@@ -95,7 +95,6 @@ fun HomeTab(state: ClonetubeAppState) {
 
 @Composable
 private fun FeedFilters(state: ClonetubeAppState) {
-    val p = currentPalette()
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(
             label = "Para ti",

@@ -208,45 +208,7 @@ fun WatchScreen(state: ClonetubeAppState) {
                 ) { IconBookmark(it, size = 17.dp) }
             }
 
-            if (video.description.isNotBlank()) {
-                var expanded by remember { mutableStateOf(false) }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(p.surfaceAlt)
-                        .border(1.dp, p.border, RoundedCornerShape(9.dp))
-                        .clickable { expanded = !expanded }
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Descripción",
-                            color = p.textSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            if (expanded) "Ocultar" else "Expandir",
-                            color = p.textMuted,
-                            fontSize = 11.sp,
-                        )
-                    }
-                    Text(
-                        video.description,
-                        color = p.textMuted,
-                        fontSize = 10.5f.sp,
-                        lineHeight = 15.sp,
-                        maxLines = if (expanded) Int.MAX_VALUE else 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
+            WatchDescription(video.description)
 
             // "A continuación" suggested list.
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -279,6 +241,49 @@ fun WatchScreen(state: ClonetubeAppState) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun WatchDescription(description: String) {
+    if (description.isBlank()) return
+    val p = currentPalette()
+    var expanded by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(9.dp))
+            .background(p.surfaceAlt)
+            .border(1.dp, p.border, RoundedCornerShape(9.dp))
+            .clickable { expanded = !expanded }
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Descripción",
+                color = p.textSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                if (expanded) "Ocultar" else "Expandir",
+                color = p.textMuted,
+                fontSize = 11.sp,
+            )
+        }
+        Text(
+            description,
+            color = p.textMuted,
+            fontSize = 10.5f.sp,
+            lineHeight = 15.sp,
+            maxLines = if (expanded) Int.MAX_VALUE else 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

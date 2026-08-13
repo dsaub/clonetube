@@ -6,15 +6,19 @@ COPY src ./src
 RUN mvn -q package -DskipTests
 
 FROM eclipse-temurin:25-jre-alpine
-RUN addgroup -S app && adduser -S app -G app
+ARG OTEL_VERSION=2.28.1
+ARG OTEL_SHA256=faa89bdeebf9b1f52be4a4374689176717b02a59df2d8f8b6eb9aa39f9292589
+RUN apk add --no-cache --virtual .otel-download curl \
+    && addgroup -S app \
+    && adduser -S app -G app \
+    && curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --show-error --location \
+        "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v${OTEL_VERSION}/opentelemetry-javaagent.jar" \
+        --output /opt/opentelemetry-javaagent.jar \
+    && echo "${OTEL_SHA256}  /opt/opentelemetry-javaagent.jar" | sha256sum --check \
+    && chown app:app /opt/opentelemetry-javaagent.jar \
+    && apk del .otel-download
 WORKDIR /app
-ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar /opt/opentelemetry-javaagent.jar
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build --chown=app:app /app/target/*.jar app.jar
 USER app
 EXPOSE 8080
-ENTRYPOINT [
-    "java", 
-    "-javaagent:/opt/opentelemetry-javaagent.jar",
-    "-jar", 
-    "app.jar"
-]
+ENTRYPOINT ["java", "-javaagent:/opt/opentelemetry-javaagent.jar", "-jar", "app.jar"]

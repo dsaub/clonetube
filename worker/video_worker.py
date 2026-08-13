@@ -11,6 +11,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from pydantic import ValidationError
 
+from constants import OTEL_AWS_SQS_SYSTEM, OTEL_MESSAGING_SYSTEM
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("video-worker")
 
@@ -84,15 +86,19 @@ def process_sqs_message(sqs_message: dict[str, Any]) -> None:
         "process-video-transcode",
         kind=SpanKind.CONSUMER,
         attributes={
-            "messaging.system": "aws-sqs",
+            OTEL_MESSAGING_SYSTEM: OTEL_AWS_SQS_SYSTEM,
             "messaging.message.id": sqs_message.get("MessageId", "unknown"),
         },
         context=parent_ctx,
     ) as span:
         try:
             job = parse_message(sqs_message["Body"])
-        except (json.JSONDecodeError, ValidationError) as error:
-            logger.error("Trabajo inválido message_id=%s error=%s", sqs_message.get("MessageId"), error)
+        except (json.JSONDecodeError, ValidationError) as exc:
+            logger.warning(
+                "Trabajo inválido message_id=%s error_type=%s",
+                sqs_message.get("MessageId"),
+                type(exc).__name__,
+            )
             span.set_status(Status(StatusCode.ERROR, "Invalid message body"))
             return
 

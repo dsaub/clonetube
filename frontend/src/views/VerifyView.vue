@@ -81,7 +81,7 @@ onMounted(verify)
   padding: 2.5rem;
   border: 1px solid #343248;
   border-radius: 1rem;
-  background: rgba(23, 23, 35, 0.58);
+  background: #171723;
   text-align: center;
 }
 
@@ -98,12 +98,12 @@ onMounted(verify)
 }
 
 .verify-icon.success {
-  background: rgba(102, 223, 155, 0.12);
+  background: #173529;
   color: #66df9b;
 }
 
 .verify-icon.error {
-  background: rgba(239, 102, 116, 0.12);
+  background: #351d27;
   color: #ff7b88;
 }
 

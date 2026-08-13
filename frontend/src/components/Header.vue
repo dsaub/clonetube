@@ -46,7 +46,17 @@ const loginActive = computed(
 const passwordMatches = computed(
   () => !verifyPassword.value || registerPassword.value === verifyPassword.value,
 );
-const emailIsValid = computed(() => !email.value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value));
+
+function isValidEmail(value: string): boolean {
+  if (!value) return true;
+  if (/\s/.test(value)) return false;
+  const at = value.indexOf('@');
+  const dot = value.lastIndexOf('.');
+  return at > 0 && at === value.lastIndexOf('@') && dot > at + 1 && dot < value.length - 1;
+}
+
+const emailIsValid = computed(() => isValidEmail(email.value));
+const authTitleId = computed(() => registeredEmail.value ? 'register-success-title' : `${authMode.value}-title`);
 const registerActive = computed(
   () =>
     Boolean(
@@ -237,7 +247,7 @@ watch(() => user.logged_in, (logged) => {
   <TvModalShell
     v-if="authVisible"
     ref="authModal"
-    :labelledby="`${authMode}-title`"
+    :labelledby="authTitleId"
     :max-width="authMode === 'register' ? '42rem' : '28rem'"
     :switching="switching"
     @closing="markClosing"
@@ -247,7 +257,7 @@ watch(() => user.logged_in, (logged) => {
           <template v-if="registeredEmail">
             <div class="panel-heading">
               <span class="signal-label">CH 03 · VERIFICACIÓN</span>
-              <h1 id="register-title">Revisa tu correo</h1>
+               <h1 id="register-success-title">Revisa tu correo</h1>
               <p>
                 Hemos enviado un enlace de verificación a
                 <strong class="verify-email">{{ registeredEmail }}</strong>.
@@ -535,8 +545,8 @@ watch(() => user.logged_in, (logged) => {
 
 .header-button.primary {
   border-color: #6c63ff;
-  background: #6c63ff;
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
 }
 
 .header-button.primary:hover {
@@ -595,7 +605,7 @@ watch(() => user.logged_in, (logged) => {
 }
 
 .studio-link:hover {
-  background: rgba(108, 99, 255, 0.12);
+  background: #292742;
   color: #fff;
 }
 
@@ -606,7 +616,7 @@ watch(() => user.logged_in, (logged) => {
 
 .header-button.logout:hover {
   border-color: #ef6674;
-  background: rgba(239, 102, 116, 0.1);
+  background: #321d28;
   color: #ff9aa4;
 }
 
@@ -740,8 +750,8 @@ watch(() => user.logged_in, (logged) => {
   padding: 0.7rem 1rem;
   border: 1px solid transparent;
   border-radius: 0.5rem;
-  background: #6c63ff;
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   cursor: pointer;
   font: inherit;
   font-weight: 750;
@@ -749,7 +759,7 @@ watch(() => user.logged_in, (logged) => {
 }
 
 .submit-button:not(:disabled):hover {
-  background: #7c75ff;
+  background: #675ee7;
   box-shadow: 0 8px 22px rgba(108, 99, 255, 0.23);
   transform: translateY(-1px);
 }
@@ -757,7 +767,7 @@ watch(() => user.logged_in, (logged) => {
 .submit-button:disabled {
   cursor: not-allowed;
   background: #39394d;
-  color: #9898a8;
+  color: #b8b8c4;
 }
 
 .mode-switch {

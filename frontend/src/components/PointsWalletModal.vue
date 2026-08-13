@@ -126,8 +126,8 @@ h2 {
   padding: 0.6rem 1rem;
   border: 1px solid #6c63ff;
   border-radius: 0.5rem;
-  background: #6c63ff;
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   cursor: pointer;
   font: inherit;
   font-weight: 750;

@@ -144,17 +144,21 @@ fun IconBlockButton(
 
 // ── forms (.field / .input) ────────────────────────────────────────────────────
 
+data class LabeledFieldOptions(
+    val placeholder: String? = null,
+    val isPassword: Boolean = false,
+    val keyboardType: KeyboardType = KeyboardType.Text,
+    val singleLine: Boolean = true,
+    val minHeight: Dp = 42.dp,
+)
+
 @Composable
 fun LabeledField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String? = null,
-    isPassword: Boolean = false,
-    keyboardType: KeyboardType = KeyboardType.Text,
-    singleLine: Boolean = true,
-    minHeight: Dp = 42.dp,
+    options: LabeledFieldOptions = LabeledFieldOptions(),
 ) {
     val p = currentPalette()
     val shape = RoundedCornerShape(7.dp)
@@ -169,24 +173,24 @@ fun LabeledField(
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            singleLine = singleLine,
+            singleLine = options.singleLine,
             textStyle = TextStyle(color = p.text, fontSize = 14.sp, fontWeight = FontWeight.Bold),
             cursorBrush = SolidColor(p.accent),
             visualTransformation =
-                if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                if (options.isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(keyboardType = options.keyboardType),
             modifier = Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = minHeight)
+                .defaultMinSize(minHeight = options.minHeight)
                 .clip(shape)
                 .background(p.input)
                 .border(1.dp, p.borderInput, shape)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
-                    if (value.isEmpty() && placeholder != null) {
+                    if (value.isEmpty() && options.placeholder != null) {
                         Text(
-                            placeholder,
+                            options.placeholder,
                             color = p.textMuted2,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Normal,
@@ -270,18 +274,6 @@ fun VideoCover(
             )
         }
     }
-}
-
-/** The header rule under the app / screen headers. */
-@Composable
-fun HeaderDivider(modifier: Modifier = Modifier) {
-    val p = currentPalette()
-    Box(
-        modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(p.divider)
-    )
 }
 
 /** The `.hr` rule, which fades out at both ends. */

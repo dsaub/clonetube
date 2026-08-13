@@ -433,8 +433,8 @@ onMounted(loadVideos)
   height: 3rem;
   place-items: center;
   border-radius: 50%;
-  background: rgba(108, 99, 255, 0.88);
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   text-indent: 0.12rem;
   transition: transform 180ms ease;
 }
@@ -448,8 +448,8 @@ onMounted(loadVideos)
   padding: 0.2rem 0.4rem;
   border: 1px solid #7c75ff;
   border-radius: 0.3rem;
-  background: rgba(108, 99, 255, 0.85);
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.08em;

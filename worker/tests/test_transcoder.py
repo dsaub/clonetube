@@ -81,16 +81,19 @@ class TranscodeProfilesTest(unittest.TestCase):
         self.assertEqual(["480p", "360p", "120p"], [p.name for p in variants_for(source)])
 
     def test_480p_above_30fps_is_rejected(self):
+        source = VideoProbe(854, 480, 31.0, 30.0, "h264")
         with self.assertRaises(UnsupportedVideoError):
-            variants_for(VideoProbe(854, 480, 31.0, 30.0, "h264"))
+            variants_for(source)
 
     def test_4k_above_30fps_is_rejected(self):
+        source = VideoProbe(3840, 2160, 60.0, 30.0, "h264")
         with self.assertRaises(UnsupportedVideoError):
-            variants_for(VideoProbe(3840, 2160, 60.0, 30.0, "h264"))
+            variants_for(source)
 
     def test_resolution_above_4k_is_rejected(self):
+        source = VideoProbe(4096, 2160, 30.0, 30.0, "h264")
         with self.assertRaises(UnsupportedVideoError):
-            variants_for(VideoProbe(4096, 2160, 30.0, 30.0, "h264"))
+            variants_for(source)
 
 
 class HlsKeyLayoutTest(unittest.TestCase):

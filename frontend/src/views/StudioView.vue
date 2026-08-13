@@ -243,12 +243,12 @@ watch(() => user.token?.access_token, (token) => {
 .back-link { align-self: flex-start; margin-bottom: 1.25rem; color: #9d99ff; font-size: .85rem; }
 .channel-mark { display: grid; width: 4rem; height: 4rem; place-items: center; border: 1px solid #4e4980; border-radius: 50%; background: #29264a; color: #c2beff; font-size: 1.5rem; font-weight: 800; }
 .studio-sidebar > span { color: #7f7d8d; font-size: .75rem; }
-.active-item { align-self: stretch; margin-top: 1.5rem; padding: .8rem 1rem; border-left: 3px solid #6c63ff; background: rgba(108, 99, 255, .12); color: #c8c5ff; font-weight: 700; }
+.active-item { align-self: stretch; margin-top: 1.5rem; padding: .8rem 1rem; border-left: 3px solid #6c63ff; background: #292742; color: #c8c5ff; font-weight: 700; }
 .studio-content { min-width: 0; padding: clamp(1.4rem, 4vw, 3rem); }
 .studio-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; }
 .studio-heading span { color: #8882ff; font-size: .68rem; font-weight: 800; letter-spacing: .16em; }
 .studio-heading h1 { margin-top: .35rem; color: #f5f4ff; font-size: clamp(1.7rem, 3vw, 2.4rem); }
-.upload-link, .save-button { border: 1px solid #6c63ff; border-radius: .55rem; background: #6c63ff; color: white; font-weight: 750; }
+.upload-link, .save-button { border: 1px solid #6c63ff; border-radius: .55rem; background: #554bd8; color: #ffffff; font-weight: 750; }
 .upload-link { display: inline-flex; align-items: center; gap: .45rem; padding: .7rem 1rem; cursor: pointer; font: inherit; font-weight: 750; white-space: nowrap; }
 .upload-link:hover { background: #7a72ff; }
 .state-card .upload-link { margin-top: 1.25rem; }

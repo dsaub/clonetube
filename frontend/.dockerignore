@@ -1,0 +1,13 @@
+.git
+.gitignore
+.vscode
+design.pen
+dist
+Dockerfile
+embedded-image.jpg
+images
+node_modules
+package-lock.json
+README.md
+test-results.xml
+coverage

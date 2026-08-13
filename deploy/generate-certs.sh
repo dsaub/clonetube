@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 CERT_DIR="$(dirname "$0")/certs"
 
 mkdir -p "$CERT_DIR"
 
-if [ -f "$CERT_DIR/privkey.pem" ] && [ -f "$CERT_DIR/fullchain.pem" ]; then
+if [[ -f "$CERT_DIR/privkey.pem" && -f "$CERT_DIR/fullchain.pem" ]]; then
     echo "Los certificados ya existen en $CERT_DIR. No se sobrescriben."
     exit 0
 fi

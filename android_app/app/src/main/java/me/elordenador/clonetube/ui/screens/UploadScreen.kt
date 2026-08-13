@@ -42,6 +42,7 @@ import me.elordenador.clonetube.ui.components.IconCheck
 import me.elordenador.clonetube.ui.components.IconClose
 import me.elordenador.clonetube.ui.components.IconGallery
 import me.elordenador.clonetube.ui.components.LabeledField
+import me.elordenador.clonetube.ui.components.LabeledFieldOptions
 import me.elordenador.clonetube.ui.components.PrimaryButton
 import me.elordenador.clonetube.ui.components.SecondaryButton
 import me.elordenador.clonetube.ui.components.SolidDivider
@@ -145,9 +146,11 @@ private fun DetailsForm(state: ClonetubeAppState) {
         label = "Descripción",
         value = state.uploadDesc,
         onValueChange = { state.uploadDesc = it },
-        placeholder = "Cuenta de qué trata el video (opcional)",
-        singleLine = false,
-        minHeight = 90.dp,
+        options = LabeledFieldOptions(
+            placeholder = "Cuenta de qué trata el video (opcional)",
+            singleLine = false,
+            minHeight = 90.dp,
+        ),
         modifier = Modifier.padding(bottom = 16.dp),
     )
     PrimaryButton(

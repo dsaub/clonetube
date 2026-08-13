@@ -1,5 +1,10 @@
-.env.example
-README.md
+.git
+.dockerignore
+.env*
+.python-version
 .venv
+Dockerfile
+README.md
 __pycache__
+*.py[cod]
 tests
