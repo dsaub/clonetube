@@ -15,6 +15,10 @@ RUN apk add --no-cache --virtual .otel-download curl \
     && echo "${OTEL_SHA256}  /opt/opentelemetry-javaagent.jar" | sha256sum --check \
     && apk del .otel-download
 
+# Vulnerabilidades encontradas por Trivy
+RUN apk upgrade --no-cache libexpat p11-kit p11-kit-trust 
+
+
 WORKDIR /app
 
 COPY --chown=app:app target/*.jar app.jar
