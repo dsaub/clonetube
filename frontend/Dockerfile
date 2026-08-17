@@ -20,11 +20,11 @@ FROM golang:1.26.6-bookworm AS caddy-build
 ARG CADDY_VERSION=2.11.4
 ARG CADDY_COMMIT=e2eee6a7fce366321294c9c2a79f3146891dcbdf
 WORKDIR /src
-RUN git clone --depth 1 --branch v${CADDY_VERSION} https://github.com/caddyserver/caddy.git . \
+RUN git clone --depth 1 --branch "v${CADDY_VERSION}" https://github.com/caddyserver/caddy.git . \
     && test "$(git rev-parse HEAD)" = "${CADDY_COMMIT}" \
     && sed -i 's|github.com/google/cel-go v0.28.1|github.com/google/cel-go v0.29.2|' go.mod \
     && sed -i 's|\[\]interpreter.Interpretable{reqAttr}|[]interpreter.InterpretableV2{reqAttr}|' modules/caddyhttp/celmatcher.go \
-    && go get golang.org/x/net@v0.56.0 golang.org/x/text@v0.39.0 google.golang.org/grpc@v1.82.1 \
+    && go mod edit -require=golang.org/x/net@v0.56.0 -require=golang.org/x/text@v0.39.0 -require=google.golang.org/grpc@v1.82.1 \
     && go mod tidy \
     && CGO_ENABLED=0 go build -trimpath -o /usr/local/bin/caddy ./cmd/caddy \
     && /usr/local/bin/caddy version
