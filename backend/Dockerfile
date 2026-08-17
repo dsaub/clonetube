@@ -9,6 +9,7 @@ FROM eclipse-temurin:25-jre-alpine
 ARG OTEL_VERSION=2.28.1
 ARG OTEL_SHA256=faa89bdeebf9b1f52be4a4374689176717b02a59df2d8f8b6eb9aa39f9292589
 RUN apk add --no-cache --virtual .otel-download curl \
+    && apk upgrade --no-cache libexpat p11-kit p11-kit-trust \
     && addgroup -S app \
     && adduser -S app -G app \
     && curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --show-error --location \
@@ -18,8 +19,6 @@ RUN apk add --no-cache --virtual .otel-download curl \
     && chown app:app /opt/opentelemetry-javaagent.jar \
     && apk del .otel-download
 
-# Vulnerabilidades encontradas por Trivy
-RUN apk upgrade --no-cache libexpat p11-kit p11-kit-trust 
 WORKDIR /app
 COPY --from=build --chown=app:app /app/target/*.jar app.jar
 USER app

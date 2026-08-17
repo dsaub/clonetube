@@ -15,22 +15,19 @@ COPY src ./src
 
 RUN pnpm run build
 
-ARG CADDY_VERSION=2.9.1
-ARG TARGETARCH
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl \
-    && case "$TARGETARCH" in \
-        amd64) CADDY_SHA512="0412057ba591c33bdb66034d7f32209619ce635147dac3084c79abcbc118a761145e695199f57c6798d88fab077f2b0d9cb999f52ded904c6d464a4eba202932" ;; \
-        arm64) CADDY_SHA512="80b917c2bd8aa0892f1386ff97af9e776067dd8cdc4793238869aca7e13f7280f89d1799a1fef08b49af92dbd86684c3ba7a38b9d44afc55ef2eeb33b49e1cbd" ;; \
-        *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
-    esac \
-    && curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --show-error --location \
-        "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_${TARGETARCH}.tar.gz" \
-        --output /tmp/caddy.tar.gz \
-    && echo "${CADDY_SHA512}  /tmp/caddy.tar.gz" | sha512sum --check --strict \
-    && tar xzf /tmp/caddy.tar.gz -C /usr/local/bin caddy \
-    && chmod 0755 /usr/local/bin/caddy \
-    && rm -rf /tmp/caddy.tar.gz /var/lib/apt/lists/*
+FROM golang:1.26.6-bookworm AS caddy-build
+
+ARG CADDY_VERSION=2.11.4
+ARG CADDY_COMMIT=e2eee6a7fce366321294c9c2a79f3146891dcbdf
+WORKDIR /src
+RUN git clone --depth 1 --branch v${CADDY_VERSION} https://github.com/caddyserver/caddy.git . \
+    && test "$(git rev-parse HEAD)" = "${CADDY_COMMIT}" \
+    && sed -i 's|github.com/google/cel-go v0.28.1|github.com/google/cel-go v0.29.2|' go.mod \
+    && sed -i 's|\[\]interpreter.Interpretable{reqAttr}|[]interpreter.InterpretableV2{reqAttr}|' modules/caddyhttp/celmatcher.go \
+    && go get golang.org/x/net@v0.56.0 golang.org/x/text@v0.39.0 google.golang.org/grpc@v1.82.1 \
+    && go mod tidy \
+    && CGO_ENABLED=0 go build -trimpath -o /usr/local/bin/caddy ./cmd/caddy \
+    && /usr/local/bin/caddy version
 
 RUN mkdir -p /etc/caddy && \
     printf '%s\n' \
@@ -44,8 +41,8 @@ RUN mkdir -p /etc/caddy && \
 FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=build --chown=root:root /app/dist /usr/share/nginx/html
-COPY --from=build --chown=root:root /usr/local/bin/caddy /usr/local/bin/caddy
-COPY --from=build --chown=root:root /etc/caddy /etc/caddy
+COPY --from=caddy-build --chown=root:root /usr/local/bin/caddy /usr/local/bin/caddy
+COPY --from=caddy-build --chown=root:root /etc/caddy /etc/caddy
 
 USER nonroot:nonroot
 
