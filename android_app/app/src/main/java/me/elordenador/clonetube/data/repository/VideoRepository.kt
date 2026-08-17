@@ -83,32 +83,40 @@ class VideoRepository(private val service: VideoService) {
         onProgress: (Int) -> Unit,
     ): List<PartInfo> {
         val resolver = context.contentResolver
-        val totalSize = resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
-            if (c.moveToFirst()) c.getLong(0).let { if (it < 0) null else it } else null
+        val totalSize = resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0).takeIf { it >= 0 } else null
         }
 
         val stream: InputStream = resolver.openInputStream(uri)
             ?: throw IllegalStateException("No se pudo leer el vídeo seleccionado")
 
-        stream.use { input ->
-            val buffer = ByteArray(CHUNK_BYTES)
-            val parts = mutableListOf<PartInfo>()
-            var partNumber = 1
-            var bytesReadTotal = 0L
-            while (true) {
-                val n = input.read(buffer)
-                if (n <= 0) break
-                val chunk = if (n == buffer.size) buffer else buffer.copyOf(n)
-                val response = uploadChunk(key, uploadId, partNumber, chunk)
-                parts.add(PartInfo(response.PartNumber, response.ETag))
-                bytesReadTotal += n
-                if (totalSize != null && totalSize > 0) {
-                    onProgress(((bytesReadTotal * 100) / totalSize).toInt().coerceIn(0, 100))
-                }
-                partNumber++
+        return stream.use { input -> uploadParts(input, key, uploadId, totalSize, onProgress) }
+    }
+
+    private suspend fun uploadParts(
+        input: InputStream,
+        key: String,
+        uploadId: String,
+        totalSize: Long?,
+        onProgress: (Int) -> Unit,
+    ): List<PartInfo> {
+        val buffer = ByteArray(CHUNK_BYTES)
+        val parts = mutableListOf<PartInfo>()
+        var partNumber = 1
+        var bytesReadTotal = 0L
+        while (true) {
+            val bytesRead = input.read(buffer)
+            if (bytesRead <= 0) break
+            val chunk = if (bytesRead == buffer.size) buffer else buffer.copyOf(bytesRead)
+            val response = uploadChunk(key, uploadId, partNumber, chunk)
+            parts.add(PartInfo(response.partNumber, response.eTag))
+            bytesReadTotal += bytesRead
+            if (totalSize != null && totalSize > 0) {
+                onProgress(((bytesReadTotal * 100) / totalSize).toInt().coerceIn(0, 100))
             }
-            if (parts.isEmpty()) throw IllegalStateException("El vídeo está vacío")
-            return parts
+            partNumber++
         }
+        check(parts.isNotEmpty()) { "El vídeo está vacío" }
+        return parts
     }
 }

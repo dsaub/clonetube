@@ -11,6 +11,11 @@ interface RegisterPayload {
     email: string;
 }
 
+async function register(payload: RegisterPayload): Promise<{ status: string }> {
+    const response = await axios.post<{ status: string }>("/api/v1/auth/register", payload);
+    return response.data;
+}
+
 export const useUserStore = defineStore('user', () => {
     const user: Ref<User|null> = ref(null);
     const token: Ref<Token|null> = ref(null);
@@ -24,11 +29,6 @@ export const useUserStore = defineStore('user', () => {
             password
         });
         await finishAuthentication(response.data);
-    }
-
-    async function register(payload: RegisterPayload): Promise<{ status: string }> {
-        const response = await axios.post<{ status: string }>("/api/v1/auth/register", payload);
-        return response.data;
     }
 
     async function finishAuthentication(authToken: Token) {

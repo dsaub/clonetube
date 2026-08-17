@@ -323,8 +323,8 @@ watch(
   padding: 0.55rem 0.95rem;
   border: 1px solid #6c63ff;
   border-radius: 0.55rem;
-  background: #6c63ff;
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;
@@ -405,8 +405,8 @@ watch(
   height: 3rem;
   place-items: center;
   border-radius: 50%;
-  background: rgba(108, 99, 255, 0.88);
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   text-indent: 0.12rem;
   transition: transform 180ms ease;
 }

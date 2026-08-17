@@ -2,20 +2,32 @@ FROM node:24-slim AS build
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.21.0 --activate
 
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts
 
-COPY . .
+COPY index.html env.d.ts tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts ./
+COPY public ./public
+COPY src ./src
 
 RUN pnpm run build
 
-ARG TARGETARCH
-ADD https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_linux_${TARGETARCH}.tar.gz /tmp/caddy.tar.gz
-RUN tar xzf /tmp/caddy.tar.gz -C /usr/local/bin caddy && chmod +x /usr/local/bin/caddy
+FROM golang:1.26.6-bookworm AS caddy-build
+
+ARG CADDY_VERSION=2.11.4
+ARG CADDY_COMMIT=e2eee6a7fce366321294c9c2a79f3146891dcbdf
+WORKDIR /src
+RUN git clone --depth 1 --branch "v${CADDY_VERSION}" https://github.com/caddyserver/caddy.git . \
+    && test "$(git rev-parse HEAD)" = "${CADDY_COMMIT}" \
+    && sed -i 's|github.com/google/cel-go v0.28.1|github.com/google/cel-go v0.29.2|' go.mod \
+    && sed -i 's|\[\]interpreter.Interpretable{reqAttr}|[]interpreter.InterpretableV2{reqAttr}|' modules/caddyhttp/celmatcher.go \
+    && go mod edit -require=golang.org/x/net@v0.56.0 -require=golang.org/x/text@v0.39.0 -require=google.golang.org/grpc@v1.82.1 \
+    && go mod tidy \
+    && CGO_ENABLED=0 go build -trimpath -o /usr/local/bin/caddy ./cmd/caddy \
+    && /usr/local/bin/caddy version
 
 RUN mkdir -p /etc/caddy && \
     printf '%s\n' \
@@ -26,12 +38,14 @@ RUN mkdir -p /etc/caddy && \
     '}' \
     > /etc/caddy/Caddyfile
 
-FROM debian:12-slim
+FROM gcr.io/distroless/static-debian12:nonroot
 
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY --from=build /usr/local/bin/caddy /usr/local/bin/caddy
-COPY --from=build /etc/caddy /etc/caddy
+COPY --from=build --chown=root:root /app/dist /usr/share/nginx/html
+COPY --from=caddy-build --chown=root:root /usr/local/bin/caddy /usr/local/bin/caddy
+COPY --from=caddy-build --chown=root:root /etc/caddy /etc/caddy
+
+USER nonroot:nonroot
 
 EXPOSE 8080
 
-CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
+ENTRYPOINT ["/usr/local/bin/caddy", "run", "--config", "/etc/caddy/Caddyfile"]

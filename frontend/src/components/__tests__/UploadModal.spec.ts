@@ -47,6 +47,11 @@ describe('UploadModal.vue', () => {
     expect(wrapper.find('.btn.primary').exists()).toBe(true)
   })
 
+  it('declares modal action buttons as non-submit buttons', () => {
+    const wrapper = mountModal()
+    expect(wrapper.findAll('button').every((button) => button.attributes('type') === 'button')).toBe(true)
+  })
+
   it('disables upload button when no file is selected', () => {
     const wrapper = mountModal()
     const btn = wrapper.find('.btn.primary')

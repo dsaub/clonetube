@@ -12,14 +12,14 @@ data class StartMultipartResponse(
 
 @Serializable
 data class UploadChunkResponse(
-    val PartNumber: Int,
-    val ETag: String,
+    @SerialName("PartNumber") val partNumber: Int,
+    @SerialName("ETag") val eTag: String,
 )
 
 @Serializable
 data class PartInfo(
-    val PartNumber: Int,
-    val ETag: String,
+    @SerialName("PartNumber") val partNumber: Int,
+    @SerialName("ETag") val eTag: String,
 )
 
 @Serializable

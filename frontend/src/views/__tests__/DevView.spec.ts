@@ -74,6 +74,6 @@ describe('DevView.vue', () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ videos: [] }) })
     const wrapper = mount(DevView)
     expect(wrapper.find('.flow-diagram').exists()).toBe(true)
-    expect(wrapper.findAll('.flow-step').length).toBe(4)
+    expect(wrapper.findAll('.flow-step')).toHaveLength(4)
   })
 })

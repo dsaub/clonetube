@@ -34,7 +34,11 @@ async function submit() {
 </script>
 
 <template>
-  <TvModalShell :labelledby="done ? 'donation-done-title' : 'donation-title'" :max-width="'30rem'">
+  <TvModalShell
+    :labelledby="done ? 'donation-done-title' : 'donation-title'"
+    :max-width="'30rem'"
+    @close="emit('close')"
+  >
     <span class="signal-label">CH 06 · DONACIÓN</span>
     <template v-if="done">
       <h2 id="donation-done-title">¡Gracias!</h2>
@@ -145,8 +149,8 @@ h2 {
   padding: 0.7rem 1rem;
   border: 1px solid transparent;
   border-radius: 0.5rem;
-  background: #6c63ff;
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   cursor: pointer;
   font: inherit;
   font-weight: 750;
@@ -161,6 +165,6 @@ h2 {
 .donation-submit:disabled {
   cursor: not-allowed;
   background: #39394d;
-  color: #9898a8;
+  color: #b8b8c4;
 }
 </style>

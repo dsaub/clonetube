@@ -6,6 +6,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from pydantic import ValidationError
 
+from constants import OTEL_AWS_SQS_SYSTEM, OTEL_MESSAGING_SYSTEM
+
 # ── OTel: inicializar ANTES de importar clients ────────────────
 from telemetry import extract_context, flush_telemetry, get_tracer, init_telemetry
 
@@ -58,19 +60,18 @@ def process_sqs_message(sqs_message: dict[str, Any]) -> None:
         "process-email-message",
         kind=SpanKind.CONSUMER,
         attributes={
-            "messaging.system": "aws-sqs",
+            OTEL_MESSAGING_SYSTEM: OTEL_AWS_SQS_SYSTEM,
             "messaging.message.id": sqs_message_id,
         },
         context=parent_ctx,
     ) as span:
         try:
             message = parse_message(raw_body)
-        except (json.JSONDecodeError, ValidationError) as error:
-            logger.error(
-                "Mensaje invalido. sqs_message_id=%s error=%s body=%r",
+        except (json.JSONDecodeError, ValidationError) as exc:
+            logger.warning(
+                "Mensaje invalido. sqs_message_id=%s error_type=%s",
                 sqs_message_id,
-                error,
-                raw_body
+                type(exc).__name__,
             )
             span.set_status(Status(StatusCode.ERROR, "Invalid message body"))
             delete_message(receipt_handle)

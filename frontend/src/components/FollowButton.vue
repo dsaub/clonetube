@@ -91,8 +91,8 @@ watch(() => props.username, loadState, { immediate: true })
   padding: 0.45rem 0.9rem;
   border: 1px solid #7c75ff;
   border-radius: 999px;
-  background: #6c63ff;
-  color: #fff;
+  background: #554bd8;
+  color: #ffffff;
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;

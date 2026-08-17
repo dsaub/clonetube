@@ -4,6 +4,7 @@ from email.message import EmailMessage as SMTPMessage
 
 from opentelemetry.trace import Status, StatusCode
 
+from constants import OTEL_MESSAGING_SYSTEM
 from models import EmailMessage
 from settings import settings
 from telemetry import get_tracer
@@ -21,12 +22,13 @@ def send_email(message: EmailMessage) -> None:
         email.add_alternative(message.body_html, subtype="html")
 
     ssl_context = ssl.create_default_context()
+    ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
     with tracer.start_as_current_span(
         "smtp-send",
         attributes={
             "email.id": message.id,
             "email.to": str(message.to),
-            "messaging.system": "smtp",
+            OTEL_MESSAGING_SYSTEM: "smtp",
         },
     ) as span:
         try:

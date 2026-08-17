@@ -207,7 +207,7 @@ function selectQuality(preference: QualityPreference) {
 
 // ─── Formateo ─────────────────────────────────────────────────────
 function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return '0:00'
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
@@ -254,7 +254,7 @@ function seek(e: MouseEvent) {
 
 function setVolume(e: Event) {
   const target = e.target as HTMLInputElement
-  volume.value = parseFloat(target.value)
+  volume.value = Number.parseFloat(target.value)
   if (videoRef.value) {
     videoRef.value.volume = volume.value
     muted.value = volume.value === 0
@@ -378,7 +378,6 @@ onUnmounted(() => {
     :class="{ 'is-fullscreen': fullscreen, 'is-loading': loading }"
     @mousemove="onMouseMove"
     @mouseleave="onMouseLeave"
-    tabindex="0"
     @keydown="onKeydown"
   >
     <!-- Video nativo -->
@@ -389,6 +388,7 @@ onUnmounted(() => {
       preload="metadata"
       crossorigin="anonymous"
       playsinline
+      tabindex="0"
       @play="onPlay"
       @pause="onPause"
       @timeupdate="onTimeUpdate"
@@ -414,6 +414,7 @@ onUnmounted(() => {
     <!-- Play grande centrado -->
     <button
       v-if="!playing && !loading && !error"
+      type="button"
       class="big-play"
       @click="togglePlay"
       aria-label="Reproducir"
@@ -440,15 +441,17 @@ onUnmounted(() => {
       <!-- Botones de control -->
       <div class="controls-row">
         <div class="controls-left">
-          <button class="ctrl-btn" @click="togglePlay" :aria-label="playing ? 'Pausar' : 'Reproducir'">
+          <button type="button" class="ctrl-btn" @click="togglePlay" :aria-label="playing ? 'Pausar' : 'Reproducir'">
             {{ playing ? '⏸' : '▶' }}
           </button>
 
-          <button class="ctrl-btn" @click="toggleMute" :aria-label="muted ? 'Activar sonido' : 'Silenciar'">
+          <button type="button" class="ctrl-btn" @click="toggleMute" :aria-label="muted ? 'Activar sonido' : 'Silenciar'">
             {{ muted || volume === 0 ? '🔇' : volume < 0.5 ? '🔉' : '🔊' }}
           </button>
 
+          <label class="sr-only" for="video-volume">Volumen</label>
           <input
+            id="video-volume"
             ref="volumeSliderRef"
             type="range"
             class="volume-slider"
@@ -508,14 +511,17 @@ onUnmounted(() => {
           </div>
 
           <button
+            type="button"
             class="ctrl-btn speed-btn"
+            :aria-label="`Velocidad de reproducción: ${playbackRate}x`"
             @click="setPlaybackRate(playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1)"
           >
             {{ playbackRate }}x
           </button>
 
-          <button class="ctrl-btn" @click="toggleFullscreen" aria-label="Pantalla completa">
-            {{ fullscreen ? '↙' : '⛶' }}
+          <button type="button" class="ctrl-btn" @click="toggleFullscreen">
+            <span aria-hidden="true">{{ fullscreen ? '↙' : '⛶' }}</span>
+            <span class="sr-only">Alternar pantalla completa</span>
           </button>
         </div>
       </div>
@@ -534,6 +540,25 @@ onUnmounted(() => {
   outline: none;
   cursor: default;
   aspect-ratio: 16 / 9;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.player-video:focus-visible,
+.ctrl-btn:focus-visible,
+.quality-option:focus-visible,
+.volume-slider:focus-visible {
+  outline: 3px solid #a9a4ff;
+  outline-offset: 2px;
 }
 
 .video-player.is-fullscreen {

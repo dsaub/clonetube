@@ -274,6 +274,7 @@ function reset() {
             </div>
           </div>
           <button
+            type="button"
             class="btn primary"
             :disabled="!canStartUpload"
             @click="startUpload"
@@ -325,7 +326,7 @@ function reset() {
             <p v-if="videoDescription"><strong>Descripción:</strong> {{ videoDescription }}</p>
             <p><strong>Archivo:</strong> {{ originalFilename }}</p>
           </div>
-          <button class="btn primary" @click="reset">Subir otro</button>
+          <button type="button" class="btn primary" @click="reset">Subir otro</button>
         </div>
 
         <!-- Error -->
@@ -333,7 +334,7 @@ function reset() {
           <div class="result-icon">❌</div>
           <h3>No se pudo subir el video</h3>
           <p class="error-msg">{{ errorMsg }}</p>
-          <button class="btn" @click="reset">Intentar de nuevo</button>
+          <button type="button" class="btn" @click="reset">Intentar de nuevo</button>
         </div>
       </div>
     </div>
@@ -389,8 +390,8 @@ function reset() {
 
 .drop-icon, .file-icon { font-size: 2.5rem; }
 .file-name { font-weight: 600; font-size: 1.05rem; }
-.file-size { color: #888; font-size: 0.9rem; }
-.drop-hint { color: #666; font-size: 0.85rem; }
+.file-size { color: #a6a4b3; font-size: 0.9rem; }
+.drop-hint { color: #aaa8b7; font-size: 0.85rem; }
 
 .metadata-fields {
   display: grid;
@@ -436,7 +437,7 @@ function reset() {
 }
 
 .field small {
-  color: #6f6d81;
+  color: #aaa8b7;
   font-size: 0.7rem;
   text-align: right;
 }
@@ -458,9 +459,9 @@ function reset() {
 }
 
 .btn:active { transform: scale(0.98); }
-.btn.primary { background: #6c63ff; color: #fff; }
+.btn.primary { background: #554bd8; color: #ffffff; }
 .btn.primary:hover { background: #5a52e0; }
-.btn.primary:disabled { background: #3a3a5a; color: #666; cursor: not-allowed; }
+.btn.primary:disabled { background: #3a3a5a; color: #b9b7c3; cursor: not-allowed; }
 
 /* ─── Progreso ──────────────────────────────────── */
 .progress-bar {
@@ -607,7 +608,7 @@ function reset() {
 
 .upload-hint {
   margin: 0.9rem 0 0;
-  color: #6f6d81;
+  color: #aaa8b7;
   font-size: 0.78rem;
   text-align: center;
 }

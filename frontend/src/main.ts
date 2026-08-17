@@ -6,14 +6,10 @@ import router from './router'
 import { useUserStore } from '@/stores/user'
 import '@/styles.css';
 
-async function bootstrap() {
-  const app = createApp(App)
-  const pinia = createPinia()
+const app = createApp(App)
+const pinia = createPinia()
 
-  app.use(pinia)
-  await useUserStore(pinia).initialize()
-  app.use(router)
-  app.mount('#app')
-}
-
-void bootstrap()
+app.use(pinia)
+await useUserStore(pinia).initialize()
+app.use(router)
+app.mount('#app')

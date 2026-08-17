@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   labelledby: string
@@ -22,6 +22,7 @@ const emit = defineEmits<{
 }>()
 
 const closing = ref(false)
+const panel = ref<HTMLElement | null>(null)
 const panelStyle = computed(() => ({
   '--tv-modal-width': props.maxWidth,
   '--tv-modal-max-height': props.maxHeight,
@@ -30,6 +31,16 @@ const panelStyle = computed(() => ({
 
 let closeTimer: ReturnType<typeof setTimeout> | undefined
 let previousBodyOverflow = ''
+let previouslyFocused: HTMLElement | null = null
+
+const focusableSelector = [
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
 
 function requestClose() {
   if (!props.canClose || closing.value) return
@@ -41,19 +52,49 @@ function requestClose() {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') requestClose()
+  if (event.key === 'Escape') {
+    requestClose()
+    return
+  }
+  if (event.key !== 'Tab' || !panel.value) return
+
+  const focusable = Array.from(panel.value.querySelectorAll<HTMLElement>(focusableSelector))
+  if (focusable.length === 0) {
+    event.preventDefault()
+    panel.value.focus()
+    return
+  }
+
+  const first = focusable[0]!
+  const last = focusable.at(-1)!
+  const activeElement = document.activeElement
+  const focusFirst = !event.shiftKey && (activeElement === last || !panel.value.contains(activeElement))
+  if (focusFirst) {
+    event.preventDefault()
+    first.focus()
+  } else if (event.shiftKey && (activeElement === first || activeElement === panel.value)) {
+    event.preventDefault()
+    last.focus()
+  }
 }
 
 onMounted(() => {
+  previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
   previousBodyOverflow = document.body.style.overflow
   document.body.style.overflow = 'hidden'
   document.addEventListener('keydown', onKeydown)
+  void nextTick(() => {
+    if (panel.value && !panel.value.contains(document.activeElement)) {
+      panel.value.focus({ preventScroll: true })
+    }
+  })
 })
 
 onBeforeUnmount(() => {
   clearTimeout(closeTimer)
   document.removeEventListener('keydown', onKeydown)
   document.body.style.overflow = previousBodyOverflow
+  previouslyFocused?.focus({ preventScroll: true })
 })
 
 defineExpose({ close: requestClose })
@@ -67,12 +108,14 @@ defineExpose({ close: requestClose })
       @mousedown.self="requestClose"
     >
       <section
+        ref="panel"
         class="tv-modal-panel"
         :class="{ 'is-closing': closing, 'is-switching': switching }"
         :style="panelStyle"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="labelledby"
+        tabindex="-1"
       >
         <div class="crt-effects" aria-hidden="true">
           <span class="crt-static"></span>
@@ -167,7 +210,7 @@ defineExpose({ close: requestClose })
   place-items: center;
   border: 1px solid #46445d;
   border-radius: 50%;
-  background: rgba(18, 18, 29, 0.75);
+  background: #12121d;
   color: #b9b7c8;
   cursor: pointer;
   font: inherit;
@@ -178,7 +221,7 @@ defineExpose({ close: requestClose })
 
 .tv-modal-close:hover:not(:disabled) {
   border-color: #ff7481;
-  background: rgba(239, 102, 116, 0.12);
+  background: #351d27;
   color: #ff8994;
   transform: rotate(5deg);
 }

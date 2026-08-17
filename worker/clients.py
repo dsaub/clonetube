@@ -3,6 +3,12 @@ from typing import Any
 import boto3
 from opentelemetry.trace import SpanKind
 
+from constants import (
+    OTEL_AWS_SQS_SYSTEM,
+    OTEL_MESSAGING_DESTINATION,
+    OTEL_MESSAGING_OPERATION,
+    OTEL_MESSAGING_SYSTEM,
+)
 from telemetry import get_tracer
 
 tracer = get_tracer("sqs-client")
@@ -40,9 +46,9 @@ def sqs_receive_message(queue_url: str | None = None, **kwargs: Any) -> dict[str
         "sqs-receive",
         kind=SpanKind.CLIENT,
         attributes={
-            "messaging.system": "aws-sqs",
-            "messaging.operation": "receive",
-            "messaging.destination": url,
+            OTEL_MESSAGING_SYSTEM: OTEL_AWS_SQS_SYSTEM,
+            OTEL_MESSAGING_OPERATION: "receive",
+            OTEL_MESSAGING_DESTINATION: url,
         },
     ):
         return _get_raw_sqs().receive_message(QueueUrl=url, **kwargs)
@@ -55,9 +61,9 @@ def sqs_delete_message(queue_url: str | None = None, **kwargs: Any) -> dict[str,
         "sqs-delete",
         kind=SpanKind.CLIENT,
         attributes={
-            "messaging.system": "aws-sqs",
-            "messaging.operation": "delete",
-            "messaging.destination": url,
+            OTEL_MESSAGING_SYSTEM: OTEL_AWS_SQS_SYSTEM,
+            OTEL_MESSAGING_OPERATION: "delete",
+            OTEL_MESSAGING_DESTINATION: url,
         },
     ):
         return _get_raw_sqs().delete_message(QueueUrl=url, **kwargs)
@@ -70,9 +76,9 @@ def sqs_change_message_visibility(queue_url: str | None = None, **kwargs: Any) -
         "sqs-change-visibility",
         kind=SpanKind.CLIENT,
         attributes={
-            "messaging.system": "aws-sqs",
-            "messaging.operation": "change-visibility",
-            "messaging.destination": url,
+            OTEL_MESSAGING_SYSTEM: OTEL_AWS_SQS_SYSTEM,
+            OTEL_MESSAGING_OPERATION: "change-visibility",
+            OTEL_MESSAGING_DESTINATION: url,
         },
     ):
         return _get_raw_sqs().change_message_visibility(QueueUrl=url, **kwargs)
@@ -101,9 +107,9 @@ def instrumented_sqs(queue_url: str, region_name: str | None = None) -> Any:
                 "sqs-receive",
                 kind=SpanKind.CLIENT,
                 attributes={
-                    "messaging.system": "aws-sqs",
-                    "messaging.operation": "receive",
-                    "messaging.destination": queue_url,
+                    OTEL_MESSAGING_SYSTEM: OTEL_AWS_SQS_SYSTEM,
+                    OTEL_MESSAGING_OPERATION: "receive",
+                    OTEL_MESSAGING_DESTINATION: queue_url,
                 },
             ):
                 return _raw.receive_message(QueueUrl=queue_url, **kw)
@@ -114,9 +120,9 @@ def instrumented_sqs(queue_url: str, region_name: str | None = None) -> Any:
                 "sqs-delete",
                 kind=SpanKind.CLIENT,
                 attributes={
-                    "messaging.system": "aws-sqs",
-                    "messaging.operation": "delete",
-                    "messaging.destination": queue_url,
+                    OTEL_MESSAGING_SYSTEM: OTEL_AWS_SQS_SYSTEM,
+                    OTEL_MESSAGING_OPERATION: "delete",
+                    OTEL_MESSAGING_DESTINATION: queue_url,
                 },
             ):
                 return _raw.delete_message(QueueUrl=queue_url, **kw)
@@ -127,9 +133,9 @@ def instrumented_sqs(queue_url: str, region_name: str | None = None) -> Any:
                 "sqs-change-visibility",
                 kind=SpanKind.CLIENT,
                 attributes={
-                    "messaging.system": "aws-sqs",
-                    "messaging.operation": "change-visibility",
-                    "messaging.destination": queue_url,
+                    OTEL_MESSAGING_SYSTEM: OTEL_AWS_SQS_SYSTEM,
+                    OTEL_MESSAGING_OPERATION: "change-visibility",
+                    OTEL_MESSAGING_DESTINATION: queue_url,
                 },
             ):
                 return _raw.change_message_visibility(QueueUrl=queue_url, **kw)

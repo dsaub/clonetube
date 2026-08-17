@@ -9,7 +9,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
@@ -20,6 +22,7 @@ import androidx.media3.ui.PlayerView
  * `stream-url` endpoint).
  */
 @Composable
+@OptIn(markerClass = [UnstableApi::class])
 fun VideoPlayer(url: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val player = remember(url) { ExoPlayer.Builder(context).build() }

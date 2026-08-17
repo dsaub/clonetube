@@ -29,7 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.elordenador.clonetube.ui.components.Avatar
-import me.elordenador.clonetube.ui.components.HeaderDivider
+import me.elordenador.clonetube.ui.components.SolidDivider
 import me.elordenador.clonetube.ui.components.IconButtonBox
 import me.elordenador.clonetube.ui.components.IconHome
 import me.elordenador.clonetube.ui.components.IconPerson
@@ -66,7 +66,6 @@ fun MainScaffold(state: ClonetubeAppState) {
 
 @Composable
 private fun TopBar(state: ClonetubeAppState) {
-    val p = currentPalette()
     Column {
         Row(
             modifier = Modifier
@@ -83,7 +82,7 @@ private fun TopBar(state: ClonetubeAppState) {
             }
             ProfileButton(state)
         }
-        HeaderDivider()
+        SolidDivider()
     }
 }
 

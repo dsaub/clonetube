@@ -202,10 +202,12 @@ class ClonetubeAppState(context: Context? = null) {
                 }
                 val nowFollowing = response?.following ?: !isSubscribed(handle)
                 if (nowFollowing) subscribedHandles.add(handle) else subscribedHandles.remove(handle)
-                channelInfo = channelInfo?.copy(
-                    following = nowFollowing,
-                    subCount = response?.followers ?: channelInfo?.subCount ?: 0,
-                )
+                channelInfo = channelInfo?.let { current ->
+                    current.copy(
+                        following = nowFollowing,
+                        subCount = response?.followers ?: current.subCount,
+                    )
+                }
             } catch (e: Exception) {
                 Log.w("Clonetube", "follow failed", e)
             }

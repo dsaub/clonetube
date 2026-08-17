@@ -106,6 +106,21 @@ describe('VideoPlayer.vue', () => {
     expect(wrapper.find('.quality-control').exists()).toBe(false)
   })
 
+  it('associates the volume control with a visible-to-assistive-technology label', async () => {
+    const wrapper = mount(VideoPlayer, { props: { src: originalSrc } })
+    await flushPromises()
+
+    expect(wrapper.get('label[for="video-volume"]').text()).toBe('Volumen')
+    expect(wrapper.get('#video-volume').attributes('type')).toBe('range')
+  })
+
+  it('declares every player button as a non-submit button', async () => {
+    const { wrapper } = await mountHlsPlayer()
+    await wrapper.find('.quality-btn').trigger('click')
+
+    expect(wrapper.findAll('button').every((button) => button.attributes('type') === 'button')).toBe(true)
+  })
+
   it('renders Auto, descending HLS levels and Original', async () => {
     const { wrapper } = await mountHlsPlayer()
     await wrapper.find('.quality-btn').trigger('click')

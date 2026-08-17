@@ -48,8 +48,9 @@ export async function fetchFeed(token?: string, options: FeedOptions = {}): Prom
   if (options.onlyFollowing) params.set('only_following', 'true')
   if (options.limit) params.set('limit', String(options.limit))
   const query = params.toString()
+  const feedUrl = query ? `${API}/feed?${query}` : `${API}/feed`
 
-  const response = await fetch(`${API}/feed${query ? `?${query}` : ''}`, {
+  const response = await fetch(feedUrl, {
     headers: withBearer(token),
   })
   if (!response.ok) {

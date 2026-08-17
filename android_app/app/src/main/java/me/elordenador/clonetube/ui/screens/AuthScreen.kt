@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import me.elordenador.clonetube.ui.components.IconButtonBox
 import me.elordenador.clonetube.ui.components.IconClose
 import me.elordenador.clonetube.ui.components.LabeledField
+import me.elordenador.clonetube.ui.components.LabeledFieldOptions
 import me.elordenador.clonetube.ui.components.PrimaryButton
 import me.elordenador.clonetube.ui.state.AuthMode
 import me.elordenador.clonetube.ui.state.ClonetubeAppState
@@ -89,8 +90,7 @@ private fun LoginForm(state: ClonetubeAppState) {
         label = "Contraseña",
         value = state.loginPassword,
         onValueChange = { state.loginPassword = it },
-        isPassword = true,
-        keyboardType = KeyboardType.Password,
+        options = LabeledFieldOptions(isPassword = true, keyboardType = KeyboardType.Password),
         modifier = Modifier.padding(bottom = 20.dp),
     )
     PrimaryButton(
@@ -135,15 +135,14 @@ private fun RegisterForm(state: ClonetubeAppState) {
         label = "Correo electrónico",
         value = state.registerEmail,
         onValueChange = { state.registerEmail = it },
-        keyboardType = KeyboardType.Email,
+        options = LabeledFieldOptions(keyboardType = KeyboardType.Email),
         modifier = Modifier.padding(bottom = 12.dp),
     )
     LabeledField(
         label = "Contraseña",
         value = state.registerPassword,
         onValueChange = { state.registerPassword = it },
-        isPassword = true,
-        keyboardType = KeyboardType.Password,
+        options = LabeledFieldOptions(isPassword = true, keyboardType = KeyboardType.Password),
         modifier = Modifier.padding(bottom = 20.dp),
     )
     PrimaryButton(
@@ -208,4 +207,3 @@ private fun SwitchModePrompt(question: String, action: String, onClick: () -> Un
         )
     }
 }
-

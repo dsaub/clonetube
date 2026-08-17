@@ -1,8 +1,12 @@
 package me.elordenador.clonetube
 
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import me.elordenador.clonetube.data.mapping.toDomain
 import me.elordenador.clonetube.data.mapping.visibilityOf
 import me.elordenador.clonetube.data.remote.dto.FeedVideoItemDto
+import me.elordenador.clonetube.data.remote.dto.PartInfo
+import me.elordenador.clonetube.data.remote.dto.UploadChunkResponse
 import me.elordenador.clonetube.model.VideoVisibility
 import me.elordenador.clonetube.util.formatSpanishDate
 import org.junit.Assert.assertEquals
@@ -26,9 +30,21 @@ class MappingTest {
     }
 
     @Test
+    fun preservesMultipartFieldNames() {
+        val response = Json.decodeFromString<UploadChunkResponse>("""{"PartNumber":2,"ETag":"etag-2"}""")
+
+        assertEquals(2, response.partNumber)
+        assertEquals("etag-2", response.eTag)
+        assertEquals(
+            """{"PartNumber":2,"ETag":"etag-2"}""",
+            Json.encodeToString(PartInfo(response.partNumber, response.eTag)),
+        )
+    }
+
+    @Test
     fun mapsFeedItemToDomain() {
         val dto = FeedVideoItemDto(
-            id = "abc",
+            id = 123,
             filename = "videos/abc.mp4",
             title = "Mi video",
             description = "desc",
